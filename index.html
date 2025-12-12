@@ -160,7 +160,9 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 // ===== 라이트 =====
-scene.add(new THREE.AmbientLight(0x9fb0ff, 0.20));
+scene.add(new THREE.AmbientLight(0x9fb0ff, 0.42));
+// 배경이 너무 어두워서 기본 조명 보강(하늘/지면 색감 분리)
+scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x101526, 0.55));
 
 const moon = new THREE.DirectionalLight(0xcfe0ff, 0.85);
 moon.position.set(120, 180, 40);
@@ -487,6 +489,42 @@ function updateChunkGeometry(chunk, samples){
 const roadGroup = new THREE.Group();
 scene.add(roadGroup);
 
+// ===== "확실히 충돌되는" 가드레일(레일) =====
+// 청크에 붙인 벽은 곡률/좌표계 때문에 '보이기만' 하고 체감 충돌이 약할 수 있어서,
+// 플레이어 기준 좌/우에 긴 레일을 따로 깔아둠(절대 통과 불가).
+const railsGroup = new THREE.Group();
+scene.add(railsGroup);
+
+const RAIL = {
+  height: 1.35,
+  thickness: 0.22,
+  length: 1400,
+  lift: 0.02,
+};
+
+const railMat = new THREE.MeshStandardMaterial({
+  color: 0x18213a,
+  roughness: 0.55,
+  metalness: 0.35,
+  emissive: 0x172445,
+  emissiveIntensity: 0.55,
+});
+
+const railGeo = new THREE.BoxGeometry(RAIL.thickness, RAIL.height, RAIL.length);
+const leftRail  = new THREE.Mesh(railGeo, railMat);
+const rightRail = new THREE.Mesh(railGeo, railMat);
+leftRail.castShadow = rightRail.castShadow = true;
+leftRail.receiveShadow = rightRail.receiveShadow = true;
+railsGroup.add(leftRail, rightRail);
+
+function updateRails(){
+  const x = ROAD.width * 0.5 + (RAIL.thickness * 0.5);
+  // roadGroup은 z로 뒤로 흐르니까 레일도 동일하게 따라감
+  leftRail.position.set(-x, RAIL.height*0.5 + RAIL.lift, -worldProgress - RAIL.length*0.5 + 80);
+  rightRail.position.set(+x, RAIL.height*0.5 + RAIL.lift, -worldProgress - RAIL.length*0.5 + 80);
+}
+updateRails();
+
 const roadChunks = [];
 const chunkSamples = [];
 
@@ -610,7 +648,7 @@ function steerInputValue(){
 
 // ===== 토글: 라이트/낮밤/안개 =====
 let headLightOn = false;
-let isNight = true;
+let isNight = false; // 기본은 DAY로 시작(안 보이는 문제 개선)
 let fogOn = true;
 
 function applyHeadlight(){
@@ -679,10 +717,8 @@ const roadWidthVal = document.getElementById("roadWidthVal");
 roadWidthInput.addEventListener("input", ()=>{
   ROAD.width = parseFloat(roadWidthInput.value);
   roadWidthVal.textContent = String(Math.round(ROAD.width));
-  // 즉시 반영: 현재 샘플로 각 청크를 한 번 갱신
-  for (let i=0; i<roadChunks.length; i++){
-    updateChunkGeometry(roadChunks[i], chunkSamples[i]);
-  }
+  for (let i=0; i<roadChunks.length; i++) updateChunkGeometry(roadChunks[i], chunkSamples[i]);
+  updateRails();
 });
 
 // ===== 차량 업데이트(질질 끌림 개선) =====
@@ -753,12 +789,19 @@ function updateCar(dt){
   carState.x += carState.latVel * dt;
   carState.x = safe(carState.x, 0);
 
-  // 도로 밖으로 제한 + 벽 충돌(튕김)
-  const maxOff = ROAD.width * 0.62;
-  if (carState.x > maxOff){
-    carState.x = maxOff;
-    carState.latVel = -Math.abs(carState.latVel) * WALL.hitBounce;
-    carState.latVel *= WALL.hitDamp;
+  // 도로 밖으로 제한 + 가드레일 충돌(절대 통과 불가)
+  // 차 폭 고려: 도로 반폭보다 조금 안쪽에서 막힘
+  const carHalf = 0.95;
+  const railLimit = (ROAD.width * 0.5) - carHalf;
+
+  if (carState.x > railLimit){
+    carState.x = railLimit;
+    carState.latVel = 0;
+    carState.speed *= 0.985;
+  } else if (carState.x < -railLimit){
+    carState.x = -railLimit;
+    carState.latVel = 0;
+    carState.speed *= 0.985;
   } else if (carState.x < -maxOff){
     carState.x = -maxOff;
     carState.latVel = Math.abs(carState.latVel) * WALL.hitBounce;
@@ -773,6 +816,9 @@ function updateCar(dt){
   roadGroup.position.x = -carState.x * 0.35;
 
   recycleRoadIfNeeded();
+
+  // 가드레일 갱신(월드 진행에 따라 앞으로 쭉 이어진 레일처럼 보이게)
+  updateRails();
 
   // 차 적용
   carRoot.position.set(carState.x, 0.0, 0.0);
