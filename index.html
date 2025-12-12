@@ -3,129 +3,139 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CarLoad Rebuild v2.3 (Hotfix)</title>
+  <title>CarLoad Rebuild v3.0 (Fresh Core)</title>
   <style>
-    html, body { margin:0; padding:0; overflow:hidden; background:#05070e; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    #ui{
-      position:fixed; left:12px; top:12px; z-index:10; width: 372px;
-      background: rgba(10,12,18,0.65); color:#e9eefc;
+    html, body { margin:0; padding:0; overflow:hidden; background:#0b1020; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    canvas{ display:block; }
+
+    #panel{
+      position:fixed; left:12px; top:12px; z-index:10; width: 390px;
+      background: rgba(10,12,18,0.62); color:#e9eefc;
       border:1px solid rgba(255,255,255,0.12);
-      border-radius:14px; padding:12px 12px 10px;
+      border-radius:16px; padding:12px;
       backdrop-filter: blur(10px);
-      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.40);
     }
-    #ui h1{ font-size:14px; margin:0 0 8px; font-weight:800; }
-    #row{ display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap: wrap; }
+    #panel h1{ margin:0 0 8px; font-size:14px; font-weight:900; }
+    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0; }
     select, button, label{
       background: rgba(255,255,255,0.08); color:#e9eefc;
-      border: 1px solid rgba(255,255,255,0.14);
-      border-radius: 10px; padding: 8px 10px; outline:none;
-      font-size: 13px;
+      border:1px solid rgba(255,255,255,0.14);
+      border-radius: 12px; padding:8px 10px; font-size:13px;
+      outline:none;
     }
-    label{ display:flex; align-items:center; gap:8px; padding: 7px 10px; user-select:none; }
+    button{ cursor:pointer; }
+    button:hover{ background: rgba(255,255,255,0.12); }
+    label{ user-select:none; display:flex; align-items:center; gap:8px; }
+    input[type="range"]{ width: 140px; }
     input[type="checkbox"]{ transform: translateY(1px); }
-    input[type="range"]{ width: 120px; }
-    button { cursor:pointer; }
-    button:hover { background: rgba(255,255,255,0.12); }
-    .muted{ color: rgba(233,238,252,0.75); font-size:12px; line-height:1.35; }
-    #stats{ margin-top:8px; font-size:12px; line-height:1.5; }
+    .muted{ font-size:12px; color: rgba(233,238,252,0.78); line-height:1.4; }
+
     #hud{
-      position:fixed; right:12px; top:12px; z-index:10;
-      background: rgba(10,12,18,0.55); color:#e9eefc;
+      position:fixed; right:12px; top:12px; z-index:10; min-width: 240px;
+      background: rgba(10,12,18,0.52); color:#e9eefc;
       border:1px solid rgba(255,255,255,0.12);
-      border-radius:14px; padding:10px 12px;
+      border-radius:16px; padding:10px 12px;
       backdrop-filter: blur(10px);
-      min-width: 230px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-      font-size:12px;
-      line-height:1.45;
-      text-align:right;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.40);
+      font-size:12px; line-height:1.45; text-align:right;
     }
-    #hint{
+    #toast{
       position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
-      z-index:10; color: rgba(233,238,252,0.85);
-      font-size:12px;
-      background: rgba(10,12,18,0.35);
+      z-index:10; padding:8px 14px; border-radius:999px;
+      background: rgba(10,12,18,0.38); color: rgba(233,238,252,0.86);
       border:1px solid rgba(255,255,255,0.10);
-      border-radius: 999px;
-      padding: 8px 14px;
       backdrop-filter: blur(10px);
-      user-select:none;
+      font-size:12px; user-select:none;
     }
-    canvas{ display:block; }
   </style>
 </head>
 <body>
-  <div id="ui">
-    <h1>CarLoad Rebuild v2.3 (Hotfix)</h1>
-    <div id="row">
+  <div id="panel">
+    <h1>CarLoad v3.0 — Road+Rails Infinite + Physics Core</h1>
+    <div class="row">
       <select id="carSelect"></select>
-      <button id="resetBtn">리셋</button>
+      <button id="resetBtn">리셋(R)</button>
       <button id="pauseBtn">일시정지</button>
-      <label title="체감이 반대면 켜봐">
-        <input id="invertSteer" type="checkbox" />
-        조향 반전
-      </label>
-      <label title="도로 폭을 조절합니다">
-        도로 폭
-        <input id="roadWidth" type="range" min="8" max="26" step="1" value="12" />
-        <span id="roadWidthVal" class="muted" style="margin-left:2px;">12</span>
+      <label title="체감이 반대면 켜">
+        <input id="invertSteer" type="checkbox" /> 조향 반전
       </label>
     </div>
+
+    <div class="row">
+      <label title="도로 폭">
+        도로 폭
+        <input id="roadWidth" type="range" min="10" max="30" step="1" value="16" />
+        <span id="roadWidthVal" class="muted">16</span>
+      </label>
+      <label title="가드레일 높이">
+        레일 높이
+        <input id="railHeight" type="range" min="1" max="4" step="0.1" value="1.6" />
+        <span id="railHeightVal" class="muted">1.6</span>
+      </label>
+    </div>
+
     <div class="muted">
       조작: <b>W</b>가속 / <b>S</b>브레이크 / <b>A,D</b>조향 / <b>Space</b>핸드브레이크 / <b>R</b>리셋<br>
-      토글: <b>L</b>라이트 / <b>P</b>낮·밤 / <b>M</b>안개
+      토글: <b>P</b>낮·밤 / <b>M</b>안개 / <b>L</b>라이트
     </div>
-    <div id="stats"></div>
+    <div id="stats" class="muted" style="margin-top:8px;"></div>
   </div>
 
   <div id="hud">
     <div><b id="hudCar">-</b></div>
     <div>속도: <b id="hudSpeed">0</b> km/h</div>
-    <div>안전: <b id="hudSafe">OK</b></div>
-    <div>조향: <b id="hudSteer">A=← / D=→</b></div>
+    <div>스티어: <b id="hudSteer">0</b>°</div>
+    <div>슬립각: <b id="hudSlip">0</b>°</div>
+    <div>YawRate: <b id="hudYaw">0</b>°/s</div>
+    <div>상태: <b id="hudSafe">OK</b></div>
     <div>라이트: <b id="hudLight">OFF</b></div>
     <div>시간: <b id="hudTime">DAY</b></div>
     <div>안개: <b id="hudFog">ON</b></div>
   </div>
 
-  <div id="hint">v2.3: 레일 충돌 100% 보장 + 화면 밝기 개선 + 빔 유지</div>
+  <div id="toast">v3.0: "진짜 충돌" 레일 + 자전거 모델 기반 아케이드 물리(슬립/그립/감쇠)</div>
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
-// ===== 안전 유틸 =====
+// =========================
+// 0) 안전/수학 유틸
+// =========================
 function isBad(n){ return !Number.isFinite(n) || Number.isNaN(n); }
 function safe(n, fallback=0){ return isBad(n) ? fallback : n; }
 function clamp(x,a,b){ x = safe(x,a); return Math.max(a, Math.min(b, x)); }
 function lerp(a,b,t){ return a + (b-a)*clamp(t,0,1); }
-function expLerpVec(out, target, lambda, dt){
+function rad(deg){ return deg * Math.PI / 180; }
+function deg(rad){ return rad * 180 / Math.PI; }
+function expSmooth(current, target, lambda, dt){
   dt = clamp(dt, 0, 0.05);
-  const t = 1 - Math.exp(-lambda*dt);
-  out.lerp(target, t);
+  const t = 1 - Math.exp(-lambda * dt);
+  return lerp(current, target, t);
 }
 
-// ===== 렌더/씬 =====
-const canvas = document.createElement("canvas");
+// =========================
+// 1) 렌더/씬
+// =========================
+const canvas = document.createElement('canvas');
 document.body.appendChild(canvas);
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-renderer.setSize(window.innerWidth, window.innerHeight, true);
+renderer.setSize(innerWidth, innerHeight, true);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.35;
+renderer.toneMappingExposure = 1.25;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x0a0f1e, 0.0032);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 2200);
-camera.position.set(0, 7, 14);
+const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 2400);
+camera.position.set(0, 7.2, 14);
 
-// ===== 스카이(밤/낮 토글) =====
+// ===== Sky =====
 const sky = (()=>{
-  const geo = new THREE.SphereGeometry(1100, 32, 16);
+  const geo = new THREE.SphereGeometry(1200, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     uniforms: {
@@ -139,171 +149,69 @@ const sky = (()=>{
     fragmentShader:`varying vec3 vWorldPos; uniform vec3 topColor, midColor, botColor; uniform float offset, exponent; void main(){ float h=normalize(vWorldPos).y; float t=pow(max(h+offset,0.0),exponent); vec3 col=mix(botColor, midColor, smoothstep(0.0,0.45,t)); col=mix(col, topColor, smoothstep(0.35,1.0,t)); gl_FragColor=vec4(col,1.0);} `
   });
   const m = new THREE.Mesh(geo, mat);
-  m.frustumCulled=false;
+  m.frustumCulled = false;
   scene.add(m);
   return m;
 })();
 
-// ===== 바닥 =====
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(3200, 3200, 1, 1),
-  new THREE.MeshStandardMaterial({ color:0xd7e7ff, roughness:1.0, metalness:0.0 })
-);
+// ===== Ground =====
+const groundMat = new THREE.MeshStandardMaterial({ color:0xd7e7ff, roughness:1.0, metalness:0.0 });
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(3400, 3400, 1, 1), groundMat);
 ground.rotation.x = -Math.PI/2;
 ground.position.y = -0.02;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// ===== 라이트(어두움 핫픽스: 밝게) =====
-scene.add(new THREE.AmbientLight(0x9fb0ff, 0.42));
+// ===== Lights =====
+scene.add(new THREE.AmbientLight(0x9fb0ff, 0.45));
 scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x101526, 0.55));
 
-const sunMoon = new THREE.DirectionalLight(0xcfe0ff, 0.25);
+const sunMoon = new THREE.DirectionalLight(0xcfe0ff, 0.35);
 sunMoon.position.set(120, 180, 40);
 sunMoon.castShadow = true;
 sunMoon.shadow.mapSize.set(2048, 2048);
 sunMoon.shadow.camera.near = 10;
-sunMoon.shadow.camera.far  = 560;
-sunMoon.shadow.camera.left = -170;
-sunMoon.shadow.camera.right= 170;
-sunMoon.shadow.camera.top  = 170;
-sunMoon.shadow.camera.bottom=-170;
+sunMoon.shadow.camera.far  = 620;
+sunMoon.shadow.camera.left = -190;
+sunMoon.shadow.camera.right= 190;
+sunMoon.shadow.camera.top  = 190;
+sunMoon.shadow.camera.bottom=-190;
 scene.add(sunMoon);
 
 const fill = new THREE.DirectionalLight(0x6ea2ff, 0.35);
-fill.position.set(-80, 80, -120);
+fill.position.set(-80, 90, -120);
 scene.add(fill);
 
-// ===== 자동차 모델 + 라이트빔 =====
-function makeCarModel(kind, color=0xffffff){
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness:0.38, metalness:0.18 });
-  const glassMat= new THREE.MeshStandardMaterial({ color:0x9fb8ff, roughness:0.15, metalness:0.05, transparent:true, opacity:0.35 });
-  const darkMat = new THREE.MeshStandardMaterial({ color:0x0e1220, roughness:0.9, metalness:0.05 });
-  const rimMat  = new THREE.MeshStandardMaterial({ color:0x22283a, roughness:0.6, metalness:0.25 });
-  const lightMat= new THREE.MeshStandardMaterial({ color:0xdde6ff, roughness:0.25, metalness:0.0, emissive:0x2a395a, emissiveIntensity:0.7 });
-
-  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.28, 14);
-  function addWheel(x,z){
-    const w = new THREE.Mesh(wheelGeo, rimMat);
-    w.rotation.z = Math.PI/2;
-    w.position.set(x, 0.42, z);
-    w.castShadow = true; w.receiveShadow = true;
-    g.add(w);
-    return w;
-  }
-
-  let body, cabin, nose, spoiler;
-
-  if (kind === "hatch"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.7,4.0), bodyMat); body.position.set(0,0.75,0);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.7,0.65,1.9), glassMat); cabin.position.set(0,1.15,-0.25);
-  } else if (kind === "sedan"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.65,4.4), bodyMat); body.position.set(0,0.75,0);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,2.1), glassMat); cabin.position.set(0,1.12,-0.25);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(1.8,0.35,1.3), bodyMat); nose.position.set(0,0.62,1.65);
-  } else if (kind === "super"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.15,0.55,4.2), bodyMat); body.position.set(0,0.65,0);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.45,1.7), glassMat); cabin.position.set(0,0.95,-0.3);
-    spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.12,0.35), darkMat); spoiler.position.set(0,1.05,-1.95);
-  } else if (kind === "hyper"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.25,0.52,4.6), bodyMat); body.position.set(0,0.62,0);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.5,0.42,1.6), glassMat); cabin.position.set(0,0.92,-0.45);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.22,1.5), bodyMat); nose.position.set(0,0.58,2.0);
-    spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.10,0.55), darkMat); spoiler.position.set(0,1.02,-2.25);
-  } else if (kind === "truck"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.25,0.9,4.6), bodyMat); body.position.set(0,0.95,-0.2);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.9,0.85,2.0), glassMat); cabin.position.set(0,1.45,0.85);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.45,1.2), bodyMat); nose.position.set(0,0.85,2.25);
-  } else {
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.65,4.0), bodyMat); body.position.set(0,0.75,0);
-    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,1.8), glassMat); cabin.position.set(0,1.1,-0.25);
-  }
-
-  [body,cabin,nose,spoiler].forEach(m=>{
-    if(!m) return;
-    m.castShadow = true; m.receiveShadow = true;
-    g.add(m);
-  });
-
-  const headL = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.20,0.10), lightMat);
-  headL.position.set(-0.75, 0.72, 2.15);
-  const headR = headL.clone(); headR.position.x = +0.75;
-  g.add(headL, headR);
-
-  const wheelZFront = (kind==="truck") ? 1.75 : 1.55;
-  const wheelZBack  = (kind==="hyper") ? -1.75 : -1.55;
-  const wheelX      = (kind==="truck") ? 1.05 : 0.98;
-
-  const wheels = [
-    addWheel(-wheelX, wheelZFront),
-    addWheel(+wheelX, wheelZFront),
-    addWheel(-wheelX, wheelZBack),
-    addWheel(+wheelX, wheelZBack),
-  ];
-
-  const skirt = new THREE.Mesh(new THREE.BoxGeometry(2.05,0.22,3.6), darkMat);
-  skirt.position.set(0,0.50,0);
-  skirt.castShadow = true; skirt.receiveShadow = true;
-  g.add(skirt);
-
-  const spot = new THREE.SpotLight(0xddeaff, 0, 38, Math.PI/5, 0.35, 1.8);
-  spot.position.set(0, 0.85, 2.55);
-  spot.target.position.set(0, 0.45, 10);
-  spot.castShadow = true;
-  g.add(spot);
-  g.add(spot.target);
-
-  const beamMat = new THREE.MeshBasicMaterial({
-    color: 0xbfd8ff,
-    transparent: true,
-    opacity: 0.0,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide
-  });
-
-  const beam1 = new THREE.Mesh(new THREE.ConeGeometry(2.4, 18, 28, 1, true), beamMat);
-  beam1.rotation.x = Math.PI/2;
-  beam1.position.set(0, 0.75, 3.15);
-  beam1.renderOrder = 10;
-  g.add(beam1);
-
-  const beam2 = new THREE.Mesh(new THREE.ConeGeometry(3.8, 26, 28, 1, true), beamMat.clone());
-  beam2.rotation.x = Math.PI/2;
-  beam2.position.set(0, 0.70, 3.45);
-  beam2.renderOrder = 10;
-  g.add(beam2);
-
-  g.userData = { wheels, headLight: spot, headMeshes: [headL, headR], headBeams: [beam1, beam2] };
-  return g;
+// ===== Fog (toggle) =====
+let fogOn = true;
+function setFog(isNight){
+  if (!fogOn){ scene.fog = null; return; }
+  scene.fog = new THREE.FogExp2(0x0a0f1e, isNight ? 0.0072 : 0.0030);
 }
 
-const CAR_PRESETS = [
-  { id:"ioniq5n", name:"Hyundai IONIQ 5 N",  kind:"hatch", color:0x8ad3ff, vmax:150, accel:7.5,  brake:11.0, steer:1.10, grip:0.95 },
-  { id:"furai",   name:"Mazda Furai",        kind:"super", color:0xff5a7a, vmax:250, accel:10.0, brake:12.5, steer:1.25, grip:1.05 },
-  { id:"huracan", name:"Huracán EVO Spyder", kind:"super", color:0x9cff68, vmax:330, accel:12.5, brake:13.5, steer:1.18, grip:1.08 },
-  { id:"agera",   name:"Agera RS",           kind:"hyper", color:0xffd36e, vmax:400, accel:14.0, brake:14.5, steer:1.10, grip:1.02 },
-  { id:"devel",   name:"Devel Sixteen",      kind:"hyper", color:0xcaa7ff, vmax:552, accel:18.0, brake:15.0, steer:0.98, grip:0.98 },
-  { id:"gt3",     name:"911 GT3-ish",        kind:"sedan", color:0xa6b8ff, vmax:310, accel:12.0, brake:14.0, steer:1.28, grip:1.12 },
-  { id:"rally",   name:"Rally Hatch",        kind:"hatch", color:0xffa06e, vmax:220, accel:11.0, brake:12.5, steer:1.35, grip:1.18 },
-  { id:"pickup",  name:"Night Pickup",       kind:"truck", color:0x7cffc7, vmax:180, accel:8.8,  brake:12.0, steer:0.95, grip:0.92 },
-];
-
-function mpsFromKmh(kmh){ return kmh / 3.6; }
-function kmhFromMps(mps){ return mps * 3.6; }
-
-// ===== 무한 도로 =====
+// =========================
+// 2) 도로/가드레일/무한반복
+//    - "플레이어는 0 근처" / "월드를 뒤로"
+//    - 커브는 1D 노이즈로 연속
+// =========================
 const ROAD = {
-  width: 12,
-  y: 0.0,
+  width: 16,
+  y: 0,
   step: 2.0,
-  curvatureLimit: 0.010,
-  bankMax: 0.22,
-  chunkLength: 60,
+  chunkLength: 70,
   chunks: 18,
+  curvatureLimit: 0.010,
+  bankMax: 0.24,
 };
-ROAD.rowsPerChunk = Math.floor(ROAD.chunkLength / ROAD.step) + 1;
+ROAD.rows = Math.floor(ROAD.chunkLength / ROAD.step) + 1;
+
+const RAIL = {
+  thickness: 0.26,
+  height: 1.6,
+  lift: 0.02,
+  // 충돌 감쇠(튕김 대신 딱 막히는 느낌)
+  speedDamp: 0.988,
+};
 
 let roadSeed = 1337;
 function hash01(n){ const x = Math.sin(n * 127.1 + roadSeed * 0.013) * 43758.5453; return x - Math.floor(x); }
@@ -313,274 +221,342 @@ const track = { heading:0, x:0, z:0, s:0 };
 function resetTrack(){ track.heading=0; track.x=0; track.z=0; track.s=0; }
 function advanceTrack(ds){
   const sNext = track.s + ds;
-  const t = sNext * 0.035;
+  const t = sNext * 0.032;
   const n  = (noise1D(t) - 0.5) * 2.0;
-  const n2 = (noise1D(t*0.37 + 40.0) - 0.5) * 2.0;
-  let curvature = (n*0.65 + n2*0.35) * ROAD.curvatureLimit;
+  const n2 = (noise1D(t*0.41 + 30.0) - 0.5) * 2.0;
+  let curvature = (n*0.64 + n2*0.36) * ROAD.curvatureLimit;
   curvature = clamp(curvature, -ROAD.curvatureLimit, ROAD.curvatureLimit);
+
   track.heading += curvature * ds;
   track.heading = safe(track.heading, 0);
+
   track.x += Math.sin(track.heading) * ds;
   track.z += Math.cos(track.heading) * ds;
   track.x = safe(track.x, 0);
   track.z = safe(track.z, 0);
   track.s = sNext;
-  const bank = clamp(curvature * 220.0, -ROAD.bankMax, ROAD.bankMax);
+
+  const bank = clamp(curvature * 240.0, -ROAD.bankMax, ROAD.bankMax);
   return { pos:new THREE.Vector3(track.x, ROAD.y, track.z), heading:track.heading, bank, s:track.s };
 }
 
 function makeRoadChunk(){
-  const verts = ROAD.rowsPerChunk * 2;
+  const verts = ROAD.rows * 2;
   const positions = new Float32Array(verts * 3);
   const normals   = new Float32Array(verts * 3);
   const uvs       = new Float32Array(verts * 2);
   const indices = [];
-  for (let i=0; i<ROAD.rowsPerChunk-1; i++){
+  for (let i=0; i<ROAD.rows-1; i++){
     const a=i*2, b=i*2+1, c=(i+1)*2, d=(i+1)*2+1;
     indices.push(a,b,c, b,d,c);
   }
+
   const geom = new THREE.BufferGeometry();
-  geom.setAttribute("position", new THREE.BufferAttribute(positions,3));
-  geom.setAttribute("normal",   new THREE.BufferAttribute(normals,3));
-  geom.setAttribute("uv",       new THREE.BufferAttribute(uvs,2));
+  geom.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  geom.setAttribute('normal',   new THREE.BufferAttribute(normals,3));
+  geom.setAttribute('uv',       new THREE.BufferAttribute(uvs,2));
   geom.setIndex(indices);
 
-  const roadMat = new THREE.MeshStandardMaterial({ color:0x3e5072, roughness:0.92, metalness:0.02 });
-  const roadMesh = new THREE.Mesh(geom, roadMat);
-  roadMesh.receiveShadow = true;
+  const roadMat = new THREE.MeshStandardMaterial({ color:0x324563, roughness:0.92, metalness:0.03 });
+  const mesh = new THREE.Mesh(geom, roadMat);
+  mesh.receiveShadow = true;
 
   const lineGeom = new THREE.BufferGeometry();
-  const linePos = new Float32Array(ROAD.rowsPerChunk * 3);
-  lineGeom.setAttribute("position", new THREE.BufferAttribute(linePos,3));
-  const lineMat = new THREE.LineDashedMaterial({ color:0x0b1224, dashSize:2.2, gapSize:2.2, transparent:true, opacity:0.55 });
+  const linePos = new Float32Array(ROAD.rows * 3);
+  lineGeom.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
+  const lineMat = new THREE.LineDashedMaterial({ color:0x0b1020, dashSize:2.5, gapSize:2.5, transparent:true, opacity:0.55 });
   const centerLine = new THREE.Line(lineGeom, lineMat);
 
+  // 레일(시각용) — 충돌은 수학적으로 처리하므로, 시각은 단순 박스로 충분
+  const railMat = new THREE.MeshStandardMaterial({
+    color:0x0f1627, roughness:0.55, metalness:0.35,
+    emissive:0x172445, emissiveIntensity:0.55
+  });
+  const railGeo = new THREE.BoxGeometry(RAIL.thickness, RAIL.height, ROAD.chunkLength);
+  const leftRail  = new THREE.Mesh(railGeo, railMat);
+  const rightRail = new THREE.Mesh(railGeo, railMat);
+  leftRail.castShadow = rightRail.castShadow = true;
+  leftRail.receiveShadow = rightRail.receiveShadow = true;
+
   const g = new THREE.Group();
-  g.add(roadMesh);
+  g.add(mesh);
   g.add(centerLine);
-  g.userData = { roadMesh, centerLine };
+  g.add(leftRail);
+  g.add(rightRail);
+  g.userData = { mesh, centerLine, leftRail, rightRail };
   return g;
 }
 
-function updateChunkGeometry(chunk, samples){
-  const { roadMesh, centerLine } = chunk.userData;
-  const posAttr = roadMesh.geometry.getAttribute("position");
-  const norAttr = roadMesh.geometry.getAttribute("normal");
-  const uvAttr  = roadMesh.geometry.getAttribute("uv");
-  const lineAttr= centerLine.geometry.getAttribute("position");
+function updateChunk(chunk, samples){
+  const { mesh, centerLine, leftRail, rightRail } = chunk.userData;
+  const pos = mesh.geometry.getAttribute('position');
+  const nor = mesh.geometry.getAttribute('normal');
+  const uv  = mesh.geometry.getAttribute('uv');
+  const lp  = centerLine.geometry.getAttribute('position');
 
   for (let i=0; i<samples.length; i++){
-    const p = samples[i].pos;
-    const yaw = samples[i].heading;
-    const bank = samples[i].bank;
+    const s = samples[i];
+    const p = s.pos;
+    const yaw = s.heading;
+    const bank = s.bank;
 
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const side = new THREE.Vector3(-forward.z, 0, forward.x);
     const up = new THREE.Vector3(0,1,0);
 
-    const bankQuat = new THREE.Quaternion().setFromAxisAngle(forward, bank);
-    const sideB = side.clone().applyQuaternion(bankQuat);
-    const upB   = up.clone().applyQuaternion(bankQuat);
+    const q = new THREE.Quaternion().setFromAxisAngle(forward, bank);
+    const sideB = side.clone().applyQuaternion(q);
+    const upB = up.clone().applyQuaternion(q);
 
     const halfW = ROAD.width * 0.5;
     const L = p.clone().addScaledVector(sideB, +halfW);
     const R = p.clone().addScaledVector(sideB, -halfW);
 
     const vi = i*2;
-    posAttr.setXYZ(vi,   L.x, L.y, L.z);
-    posAttr.setXYZ(vi+1, R.x, R.y, R.z);
+    pos.setXYZ(vi,   L.x, L.y, L.z);
+    pos.setXYZ(vi+1, R.x, R.y, R.z);
 
-    norAttr.setXYZ(vi,   upB.x, upB.y, upB.z);
-    norAttr.setXYZ(vi+1, upB.x, upB.y, upB.z);
+    nor.setXYZ(vi,   upB.x, upB.y, upB.z);
+    nor.setXYZ(vi+1, upB.x, upB.y, upB.z);
 
-    const v = (i/(samples.length-1)) * 80.0;
-    uvAttr.setXY(vi,   0, v);
-    uvAttr.setXY(vi+1, 1, v);
+    const v = (i/(samples.length-1)) * 90.0;
+    uv.setXY(vi,   0, v);
+    uv.setXY(vi+1, 1, v);
 
-    lineAttr.setXYZ(i, p.x, p.y+0.01, p.z);
+    lp.setXYZ(i, p.x, p.y+0.01, p.z);
   }
 
-  posAttr.needsUpdate = true;
-  norAttr.needsUpdate = true;
-  uvAttr.needsUpdate  = true;
-  roadMesh.geometry.computeBoundingSphere();
+  pos.needsUpdate = true;
+  nor.needsUpdate = true;
+  uv.needsUpdate  = true;
+  mesh.geometry.computeBoundingSphere();
 
-  lineAttr.needsUpdate = true;
+  lp.needsUpdate = true;
   centerLine.computeLineDistances();
+
+  // 레일 배치: 청크의 시작/끝 샘플 기준(단순)
+  const a = samples[0];
+  const b = samples[samples.length-1];
+  const mid = a.pos.clone().add(b.pos).multiplyScalar(0.5);
+  leftRail.position.set(0, RAIL.height*0.5 + RAIL.lift, 0);
+  rightRail.position.set(0, RAIL.height*0.5 + RAIL.lift, 0);
+  // 청크 그룹은 곧바로 월드 좌표로 고정해두는 대신, roadGroup 전체를 움직이므로
+  // 여기서는 단순히 "청크 로컬"에서 좌우 오프셋만 적용.
+  const x = ROAD.width * 0.5 + RAIL.thickness*0.5;
+  leftRail.position.x = -x;
+  rightRail.position.x = +x;
+  // z는 청크 자체가 geometry로 이미 만들어진 길이라 0 중심에 둠
 }
 
 const roadGroup = new THREE.Group();
 scene.add(roadGroup);
 
-// ===== 확실한 레일(시각+충돌은 수학적으로) =====
-const railsGroup = new THREE.Group();
-roadGroup.add(railsGroup);
+let roadChunks = [];
+let samplesByChunk = [];
 
-const RAIL = { height: 1.35, thickness: 0.24, length: 1200, lift: 0.02 };
-const railMat = new THREE.MeshStandardMaterial({
-  color: 0x0f1627,
-  roughness: 0.55,
-  metalness: 0.35,
-  emissive: 0x172445,
-  emissiveIntensity: 0.55,
-});
-const railGeo = new THREE.BoxGeometry(RAIL.thickness, RAIL.height, RAIL.length);
-const leftRail  = new THREE.Mesh(railGeo, railMat);
-const rightRail = new THREE.Mesh(railGeo, railMat);
-leftRail.castShadow = rightRail.castShadow = true;
-leftRail.receiveShadow = rightRail.receiveShadow = true;
-railsGroup.add(leftRail, rightRail);
-
-function placeRails(){
-  const x = ROAD.width * 0.5 + (RAIL.thickness * 0.5);
-  leftRail.position.set(-x, RAIL.height*0.5 + RAIL.lift, -RAIL.length*0.5 + 90);
-  rightRail.position.set(+x, RAIL.height*0.5 + RAIL.lift, -RAIL.length*0.5 + 90);
-}
-
-const roadChunks = [];
-const chunkSamples = [];
-
-function initRoad(){
+function buildRoad(){
   roadGroup.clear();
-  roadGroup.add(railsGroup);
-  railsGroup.clear();
-  railsGroup.add(leftRail, rightRail);
-
-  roadChunks.length = 0;
-  chunkSamples.length = 0;
+  roadChunks = [];
+  samplesByChunk = [];
   resetTrack();
 
-  const first = { pos:new THREE.Vector3(0,ROAD.y,0), heading:0, bank:0, s:0 };
+  let prev = { pos:new THREE.Vector3(0,ROAD.y,0), heading:0, bank:0, s:0 };
   track.x = 0; track.z = 0; track.heading = 0; track.s = 0;
 
-  let prev = first;
   for (let c=0; c<ROAD.chunks; c++){
     const chunk = makeRoadChunk();
     const samples = [prev];
-    for (let i=1; i<ROAD.rowsPerChunk; i++){
+    for (let i=1; i<ROAD.rows; i++){
       const next = advanceTrack(ROAD.step);
       samples.push(next);
       prev = next;
     }
-    updateChunkGeometry(chunk, samples);
+    updateChunk(chunk, samples);
     roadGroup.add(chunk);
     roadChunks.push(chunk);
-    chunkSamples.push(samples);
+    samplesByChunk.push(samples);
   }
-
-  placeRails();
 }
-initRoad();
 
 let worldProgress = 0;
 let lastRecycleAt = 0;
 
-function recycleRoadIfNeeded(){
+function recycleRoad(){
   const distSince = worldProgress - lastRecycleAt;
   if (distSince < ROAD.chunkLength) return;
-
   const jumps = Math.floor(distSince / ROAD.chunkLength);
   if (jumps <= 0) return;
 
   for (let j=0; j<jumps; j++){
     const chunk = roadChunks.shift();
-    roadChunks.push(chunk);
+    const oldSamples = samplesByChunk.shift();
 
-    const prev = chunkSamples[chunkSamples.length-1][ROAD.rowsPerChunk-1];
+    // 마지막 청크 끝에서 이어서 새 샘플 생성
+    const prev = samplesByChunk[samplesByChunk.length-1][ROAD.rows-1];
     const samples = [prev];
-    for (let i=1; i<ROAD.rowsPerChunk; i++) samples.push(advanceTrack(ROAD.step));
+    for (let i=1; i<ROAD.rows; i++) samples.push(advanceTrack(ROAD.step));
 
-    chunkSamples.shift();
-    chunkSamples.push(samples);
+    updateChunk(chunk, samples);
 
-    updateChunkGeometry(chunk, samples);
+    // 맨 뒤로 붙이기
+    roadChunks.push(chunk);
+    samplesByChunk.push(samples);
   }
 
   lastRecycleAt += jumps * ROAD.chunkLength;
 }
 
-// ===== 차량 =====
+buildRoad();
+
+// =========================
+// 3) 차량(간단 모델) + 라이트
+// =========================
+function makeCar(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.65,4.2), new THREE.MeshStandardMaterial({ color, roughness:0.35, metalness:0.18 }));
+  body.position.set(0,0.75,0);
+  body.castShadow = true; body.receiveShadow = true;
+
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.55,0.45,1.6), new THREE.MeshStandardMaterial({
+    color:0x9fb8ff, roughness:0.12, metalness:0.05, transparent:true, opacity:0.33
+  }));
+  glass.position.set(0,1.03,-0.35);
+  glass.castShadow = true; glass.receiveShadow = true;
+
+  const wheelMat = new THREE.MeshStandardMaterial({ color:0x22283a, roughness:0.7, metalness:0.25 });
+  const wheelGeo = new THREE.CylinderGeometry(0.42,0.42,0.28, 14);
+  function wheel(x,z){
+    const w = new THREE.Mesh(wheelGeo, wheelMat);
+    w.rotation.z = Math.PI/2;
+    w.position.set(x,0.42,z);
+    w.castShadow = true; w.receiveShadow = true;
+    g.add(w);
+    return w;
+  }
+  const wheels = [wheel(-0.98,1.55), wheel(0.98,1.55), wheel(-0.98,-1.55), wheel(0.98,-1.55)];
+
+  const headMat = new THREE.MeshStandardMaterial({
+    color:0xdde6ff, roughness:0.22, metalness:0.0,
+    emissive:0x2a395a, emissiveIntensity:0.45
+  });
+  const hL = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.20,0.10), headMat);
+  hL.position.set(-0.75,0.72,2.15);
+  const hR = hL.clone(); hR.position.x = 0.75;
+
+  const spot = new THREE.SpotLight(0xddeaff, 0, 38, Math.PI/5, 0.35, 1.8);
+  spot.position.set(0,0.85,2.55);
+  spot.target.position.set(0,0.45,10);
+  spot.castShadow = true;
+
+  const beamMat = new THREE.MeshBasicMaterial({
+    color:0xbfd8ff, transparent:true, opacity:0.0,
+    blending: THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide
+  });
+  const beam = new THREE.Mesh(new THREE.ConeGeometry(2.8, 20, 28, 1, true), beamMat);
+  beam.rotation.x = Math.PI/2;
+  beam.position.set(0,0.75,3.20);
+  beam.renderOrder = 10;
+
+  g.add(body, glass, hL, hR);
+  g.add(spot, spot.target);
+  g.add(beam);
+
+  g.userData = { wheels, headLight: spot, headMeshes:[hL,hR], headBeam: beam };
+  return g;
+}
+
+const CAR_PRESETS = [
+  { name:"Hyundai IONIQ 5 N", color:0x8ad3ff, vmax:150, accel:7.5,  brake:11.5, steerMax:28, mu:1.05 },
+  { name:"Mazda Furai",       color:0xff5a7a, vmax:250, accel:10.2, brake:13.0, steerMax:30, mu:1.12 },
+  { name:"Huracán EVO Spyder",color:0x9cff68, vmax:330, accel:12.7, brake:14.0, steerMax:26, mu:1.10 },
+  { name:"Agera RS",          color:0xffd36e, vmax:400, accel:14.2, brake:14.8, steerMax:24, mu:1.06 },
+  { name:"Devel Sixteen",     color:0xcaa7ff, vmax:552, accel:18.0, brake:15.2, steerMax:22, mu:1.02 },
+];
+
+function mps(kmh){ return kmh/3.6; }
+function kmh(mps){ return mps*3.6; }
+
 let carIndex = 0;
-let carModel = null;
 const carRoot = new THREE.Group();
 scene.add(carRoot);
+let car = null;
 
-const carState = { x:0, yaw:0, yawRate:0, speed:0, steerAngle:0, latVel:0 };
+// =========================
+// 4) 물리(핵심)
+//    - 자전거 모델 + 속도 기반 타이어 한계(간단)
+//    - '질질' 방지: v(전방)·u(측방) 분리 + 강한 감쇠 + 한계에서 클램프
+// =========================
+const state = {
+  x: 0,          // lateral offset (player space)
+  z: 0,          // forward distance (unused because world moves)
+  yaw: 0,
+  v: 0,          // forward speed (m/s)
+  u: 0,          // lateral velocity (m/s)
+  r: 0,          // yaw rate (rad/s)
+  steer: 0,      // steer angle (rad)
+  slip: 0,
+};
+
+// 차체/축거리(대충)
+const VEH = {
+  mass: 1500,
+  wheelBase: 2.65,
+  lf: 1.25,
+  lr: 1.40,
+};
+
+// 아케이드 안정화 파라미터
+const PHYS = {
+  steerResponse: 18.0,       // 스티어 반응
+  yawDamp: 10.0,             // yawrate 감쇠
+  latDamp: 16.0,             // 측면 속도 감쇠(질질 방지 핵심)
+  gripBuild: 10.0,           // 타이어 힘 응답 속도
+  lowSpeedAssist: 0.35,      // 저속에서 방향 전환 보조
+  handbrakeGripMul: 0.55,
+  drag0: 0.020,
+  drag1: 0.0024,
+};
 
 function loadCar(i){
   carIndex = (i + CAR_PRESETS.length) % CAR_PRESETS.length;
-  const preset = CAR_PRESETS[carIndex];
-  if (carModel) carRoot.remove(carModel);
-  carModel = makeCarModel(preset.kind, preset.color);
-  carRoot.add(carModel);
-  resetCar(false);
-  document.getElementById("hudCar").textContent = preset.name;
-  updateStatsPanel();
+  const p = CAR_PRESETS[carIndex];
+  carRoot.clear();
+  car = makeCar(p.color);
+  carRoot.add(car);
+
+  resetAll(false);
+  document.getElementById('hudCar').textContent = p.name;
+  document.getElementById('stats').textContent = `vmax ${p.vmax}km/h · accel ${p.accel} · brake ${p.brake} · steerMax ${p.steerMax}° · mu ${p.mu}`;
   applyHeadlight();
 }
 
-function resetCar(rebuildRoad=true){
-  carState.x = 0;
-  carState.yaw = 0;
-  carState.yawRate = 0;
-  carState.speed = 0;
-  carState.steerAngle = 0;
-  carState.latVel = 0;
-
+function resetAll(rebuildRoad=true){
+  state.x=0; state.z=0; state.yaw=0; state.v=0; state.u=0; state.r=0; state.steer=0; state.slip=0;
   worldProgress = 0;
   lastRecycleAt = 0;
-  if (rebuildRoad) initRoad();
+  if (rebuildRoad) buildRoad();
 }
 
 // ===== 입력 =====
 const keys = new Set();
-window.addEventListener("keydown",(e)=>{
-  keys.add(e.code);
-  if (e.code === "KeyR") resetCar(true);
-});
-window.addEventListener("keyup",(e)=> keys.delete(e.code));
-function keyDown(code){ return keys.has(code); }
+addEventListener('keydown', (e)=>{ keys.add(e.code); if (e.code==='KeyR') resetAll(true); });
+addEventListener('keyup', (e)=> keys.delete(e.code));
+function down(code){ return keys.has(code); }
 
-const invertSteerEl = document.getElementById("invertSteer");
-function steerInputValue(){
-  const left  = keyDown("KeyA") ? 1 : 0;
-  const right = keyDown("KeyD") ? 1 : 0;
-  let s = (right - left);
+const invertSteerEl = document.getElementById('invertSteer');
+function steerInput(){
+  const L = down('KeyA') ? 1 : 0;
+  const R = down('KeyD') ? 1 : 0;
+  let s = (R - L);
   if (invertSteerEl.checked) s = -s;
   return s;
 }
 
-// ===== 토글: 라이트/낮밤/안개 =====
-let headLightOn = false;
+// ===== 낮/밤/안개/라이트 =====
 let isNight = false;
-let fogOn = true;
+let headOn = false;
 
-function applyHeadlight(){
-  const spot = carModel?.userData?.headLight;
-  const heads = carModel?.userData?.headMeshes || [];
-  const beams = carModel?.userData?.headBeams || [];
-
-  if (spot) spot.intensity = headLightOn ? 3.2 : 0;
-
-  heads.forEach(m=>{
-    if (!m?.material) return;
-    m.material.emissive = new THREE.Color(0x2a395a);
-    m.material.emissiveIntensity = headLightOn ? 1.3 : 0.35;
-    m.material.needsUpdate = true;
-  });
-
-  const base = headLightOn ? (isNight ? 0.22 : 0.10) : 0.0;
-  const sp = clamp(Math.abs(kmhFromMps(carState.speed))/250, 0, 1);
-  beams.forEach((b, idx)=>{
-    if (!b?.material) return;
-    const k = idx === 0 ? 1.0 : 0.7;
-    b.material.opacity = base * k * (0.85 + sp*0.35);
-  });
-
-  document.getElementById("hudLight").textContent = headLightOn ? "ON" : "OFF";
-}
-
-function applyTimeOfDay(){
+function applyTime(){
   const u = sky.material.uniforms;
   if (isNight){
     u.topColor.value.set(0x16224a);
@@ -589,253 +565,284 @@ function applyTimeOfDay(){
     sunMoon.intensity = 0.85;
     fill.intensity = 0.25;
     renderer.toneMappingExposure = 1.05;
-    if (scene.fog && fogOn) scene.fog.density = 0.0075;
-    ground.material.color.set(0x0b1224);
+    groundMat.color.set(0x0b1224);
   } else {
     u.topColor.value.set(0x8fd3ff);
     u.midColor.value.set(0x4d8bff);
     u.botColor.value.set(0xd9f2ff);
-    sunMoon.intensity = 0.25;
+    sunMoon.intensity = 0.35;
     fill.intensity = 0.35;
-    renderer.toneMappingExposure = 1.35;
-    if (scene.fog && fogOn) scene.fog.density = 0.0032;
-    ground.material.color.set(0xd7e7ff);
+    renderer.toneMappingExposure = 1.25;
+    groundMat.color.set(0xd7e7ff);
   }
-  document.getElementById("hudTime").textContent = isNight ? "NIGHT" : "DAY";
+  setFog(isNight);
+  document.getElementById('hudTime').textContent = isNight ? 'NIGHT' : 'DAY';
   applyHeadlight();
 }
 
-function applyFog(){
-  if (fogOn){
-    scene.fog = new THREE.FogExp2(0x0a0f1e, isNight ? 0.0075 : 0.0032);
-  } else {
-    scene.fog = null;
-  }
-  document.getElementById("hudFog").textContent = fogOn ? "ON" : "OFF";
+function applyFogUI(){
+  setFog(isNight);
+  document.getElementById('hudFog').textContent = fogOn ? 'ON' : 'OFF';
 }
 
-window.addEventListener("keydown", (e)=>{
-  if (e.code === "KeyL"){ headLightOn = !headLightOn; applyHeadlight(); }
-  if (e.code === "KeyP"){ isNight = !isNight; applyTimeOfDay(); }
-  if (e.code === "KeyM"){ fogOn = !fogOn; applyFog(); }
+function applyHeadlight(){
+  if (!car) return;
+  const spot = car.userData.headLight;
+  const beam = car.userData.headBeam;
+  const heads = car.userData.headMeshes;
+  if (spot) spot.intensity = headOn ? 3.2 : 0;
+  const base = headOn ? (isNight ? 0.24 : 0.12) : 0.0;
+  if (beam?.material) beam.material.opacity = base;
+  heads?.forEach(m=>{ if(m?.material){ m.material.emissiveIntensity = headOn ? 1.15 : 0.40; } });
+  document.getElementById('hudLight').textContent = headOn ? 'ON' : 'OFF';
+}
+
+addEventListener('keydown', (e)=>{
+  if (e.code==='KeyP'){ isNight=!isNight; applyTime(); }
+  if (e.code==='KeyM'){ fogOn=!fogOn; applyFogUI(); }
+  if (e.code==='KeyL'){ headOn=!headOn; applyHeadlight(); }
 });
 
-// ===== 도로 폭 UI =====
-const roadWidthInput = document.getElementById("roadWidth");
-const roadWidthVal = document.getElementById("roadWidthVal");
-roadWidthInput.value = String(ROAD.width);
-roadWidthVal.textContent = String(ROAD.width);
-roadWidthInput.addEventListener("input", ()=>{
-  ROAD.width = parseFloat(roadWidthInput.value);
-  roadWidthVal.textContent = String(Math.round(ROAD.width));
-  for (let i=0; i<roadChunks.length; i++) updateChunkGeometry(roadChunks[i], chunkSamples[i]);
-  placeRails();
-});
+// =========================
+// 5) Physics Step
+// =========================
+let safeFlag = 'OK';
 
-// ===== 차량 업데이트(아케이드 안정형) =====
-let safeFlag = "OK";
-
-function updateCar(dt){
+function step(dt){
   dt = clamp(dt, 0, 0.05);
   const p = CAR_PRESETS[carIndex];
 
-  const throttle = keyDown("KeyW") ? 1 : 0;
-  const brake    = keyDown("KeyS") ? 1 : 0;
-  const handbrake= keyDown("Space") ? 1 : 0;
+  const throttle = down('KeyW') ? 1 : 0;
+  const brake = down('KeyS') ? 1 : 0;
+  const hand = down('Space') ? 1 : 0;
 
-  const vmax = mpsFromKmh(p.vmax);
-  const accel = p.accel;
-  const brakePower = p.brake;
+  // --- Longitudinal ---
+  const vmax = mps(p.vmax);
+  const drag = PHYS.drag0 + PHYS.drag1 * Math.abs(state.v);
+  let ax = 0;
 
-  const drag = 0.020 + Math.abs(carState.speed) * 0.0022;
-  const forward = Math.max(0, carState.speed);
-  const accelScale = clamp(1.0 - forward/(vmax + 1e-3), 0.0, 1.0);
+  // 최고속 접근형 가속(간단)
+  const accelScale = clamp(1 - Math.max(0,state.v)/(vmax+1e-3), 0, 1);
+  ax += throttle * p.accel * (0.35 + 0.65*accelScale);
+  ax -= brake * p.brake;
+  ax -= state.v * drag;
+  if (hand) ax -= Math.sign(state.v) * 3.2;
 
-  let a = 0;
-  a += throttle * accel * (0.35 + 0.65*accelScale);
-  a -= brake * brakePower;
-  a -= carState.speed * drag;
-  if (handbrake) a -= Math.sign(carState.speed) * 3.5;
+  state.v = safe(state.v + ax*dt, 0);
+  state.v = clamp(state.v, -vmax*0.20, vmax);
 
-  carState.speed += a * dt;
-  carState.speed = clamp(safe(carState.speed, 0), -vmax*0.22, vmax);
+  // --- Steering (input -> steer angle) ---
+  const sIn = steerInput();
+  const steerMax = rad(p.steerMax);
 
-  const steerInput = steerInputValue();
-  const grip = p.grip * (handbrake ? 0.55 : 1.0);
-  const speedFactor = clamp(1.0 - Math.abs(carState.speed)/(vmax+1e-3), 0.20, 1.0);
-  const steerTarget = steerInput * p.steer * speedFactor;
+  // 속도 높을수록 최대 조향 줄이기
+  const speedFactor = clamp(1 - Math.abs(state.v)/(vmax+1e-3), 0.22, 1);
+  const steerTarget = sIn * steerMax * speedFactor;
+  state.steer = expSmooth(state.steer, steerTarget, PHYS.steerResponse, dt);
 
-  const steerT = 1 - Math.exp(-20.0*dt);
-  carState.steerAngle = lerp(carState.steerAngle, steerTarget, steerT);
-  carState.steerAngle = safe(carState.steerAngle, 0);
+  // --- Bicycle model-ish lateral dynamics ---
+  // 저속에서 모델이 너무 무뎌지는 것 보정(아케이드)
+  const vAbs = Math.max(0.5, Math.abs(state.v));
 
-  const yawFromSteer = carState.steerAngle * (0.75 + Math.abs(carState.speed)*0.06) * grip;
-  const yawDamp = (Math.abs(steerInput) > 0.02) ? 10.0 : 18.0;
-  const yawT = 1 - Math.exp(-yawDamp*dt);
-  carState.yawRate = lerp(carState.yawRate, yawFromSteer, yawT);
+  // slip angle approximation: beta ≈ atan2(u, v)
+  const beta = Math.atan2(state.u, vAbs);
 
-  const yawMax = 2.2 + Math.abs(carState.speed)*0.06;
-  carState.yawRate = clamp(safe(carState.yawRate, 0), -yawMax, +yawMax);
+  // 타이어 한계: a_lat_max = mu * g
+  const mu = p.mu * (hand ? PHYS.handbrakeGripMul : 1.0);
+  const g = 9.81;
+  const aLatMax = mu * g;
 
-  carState.yaw += carState.yawRate * dt;
-  carState.yaw = safe(carState.yaw, 0);
+  // 목표 yaw rate: r_target ≈ v/L * tan(steer)
+  const rTarget = (state.v / VEH.wheelBase) * Math.tan(state.steer);
 
-  const spAbs = Math.abs(carState.speed);
-  const latTargetMax = clamp(spAbs * 0.40, 0, 13.5);
-  let latTarget = 0;
-  if (Math.abs(steerInput) > 0.02){
-    latTarget = clamp(carState.steerAngle * spAbs * 0.34 * grip, -latTargetMax, +latTargetMax);
-  }
+  // yaw rate dynamics + 감쇠
+  state.r = expSmooth(state.r, rTarget, PHYS.gripBuild, dt);
+  state.r *= Math.exp(-PHYS.yawDamp * dt);
 
-  const follow = (Math.abs(steerInput) > 0.02) ? 11.0 : 30.0;
-  const tFollow = 1 - Math.exp(-follow * dt);
-  carState.latVel = lerp(carState.latVel, latTarget, tFollow);
+  // lateral accel needed: a_lat ≈ v * r
+  let aLat = state.v * state.r;
 
-  const extraFric = (Math.abs(steerInput) > 0.02) ? (handbrake ? 2.0 : 6.5) : (handbrake ? 4.0 : 18.0);
-  carState.latVel *= Math.exp(-extraFric * dt);
+  // 타이어 한계 적용(클램프)
+  aLat = clamp(aLat, -aLatMax, +aLatMax);
 
-  const latHardMax = clamp(spAbs * (handbrake ? 0.55 : 0.28), 0, 15.0);
-  carState.latVel = clamp(safe(carState.latVel, 0), -latHardMax, +latHardMax);
+  // lateral velocity update
+  state.u = safe(state.u + aLat * dt, 0);
 
-  carState.x += carState.latVel * dt;
-  carState.x = safe(carState.x, 0);
+  // "질질" 방지: 측면 속도 강 감쇠 + 입력 없을수록 더 강하게
+  const noSteer = Math.abs(sIn) < 0.02;
+  const latD = noSteer ? (PHYS.latDamp * 1.8) : PHYS.latDamp;
+  state.u *= Math.exp(-latD * dt);
 
-  // ===== 레일 충돌(수학적으로 100% 막힘) =====
+  // yaw integrate
+  state.yaw = safe(state.yaw + state.r * dt, 0);
+
+  // lateral position integrate (player space)
+  state.x = safe(state.x + state.u * dt, 0);
+
+  // ===== Guardrail collision (hard) =====
+  // car half-width(대충) 고려
   const carHalf = 0.95;
-  const railLimit = (ROAD.width * 0.5) - carHalf;
-  if (carState.x > railLimit){
-    carState.x = railLimit;
-    carState.latVel = 0;
-    carState.speed *= 0.985;
-  } else if (carState.x < -railLimit){
-    carState.x = -railLimit;
-    carState.latVel = 0;
-    carState.speed *= 0.985;
+  const limit = (ROAD.width * 0.5) - carHalf;
+  if (state.x > limit){
+    state.x = limit;
+    state.u = 0;
+    state.v *= RAIL.speedDamp;
+  } else if (state.x < -limit){
+    state.x = -limit;
+    state.u = 0;
+    state.v *= RAIL.speedDamp;
   }
 
-  worldProgress += Math.max(0, carState.speed) * dt;
+  // ===== World progress (only forward) =====
+  worldProgress += Math.max(0, state.v) * dt;
   worldProgress = safe(worldProgress, 0);
 
+  // ===== Apply transforms =====
   roadGroup.position.z = -worldProgress;
-  roadGroup.position.x = -carState.x * 0.35;
+  roadGroup.position.x = -state.x * 0.35;
 
-  recycleRoadIfNeeded();
+  // car
+  carRoot.position.set(state.x, 0, 0);
+  carRoot.rotation.y = state.yaw;
 
-  carRoot.position.set(carState.x, 0.0, 0.0);
-  carRoot.rotation.y = carState.yaw;
+  // wheels
+  if (car){
+    const spin = state.v * dt * 2.35;
+    car.userData.wheels.forEach((w, i)=>{
+      w.rotation.x += spin;
+      if (i<2) w.rotation.y = state.steer * 0.30;
+    });
+  }
 
-  const wheels = carModel?.userData?.wheels || [];
-  const wheelSpin = carState.speed * dt * 2.25;
-  wheels.forEach((w, idx)=>{
-    w.rotation.x += wheelSpin;
-    if (idx < 2) w.rotation.y = carState.steerAngle * 0.25;
-  });
+  // slip info
+  state.slip = beta;
 
-  safeFlag = "OK";
-  if (isBad(carState.speed) || isBad(carState.x) || isBad(worldProgress) || isBad(carState.latVel) || isBad(carState.yaw)) safeFlag = "GUARD";
+  recycleRoad();
+
+  safeFlag = 'OK';
+  if ([state.x,state.v,state.u,state.yaw,state.r,state.steer,worldProgress].some(isBad)) safeFlag = 'GUARD';
 }
 
-// ===== 카메라 =====
-const camState = { pos: new THREE.Vector3(0,7,14), look: new THREE.Vector3(0,1.2,0) };
-function updateCamera(dt){
+// =========================
+// 6) 카메라
+// =========================
+const cam = { px:0, py:7.2, pz:14, lx:0, ly:1.2, lz:0 };
+function stepCamera(dt){
   dt = clamp(dt, 0, 0.05);
-  const spKmh = kmhFromMps(Math.abs(carState.speed));
+  const sp = Math.abs(kmh(state.v));
 
-  const forward = new THREE.Vector3(Math.sin(carState.yaw), 0, Math.cos(carState.yaw));
+  const forward = new THREE.Vector3(Math.sin(state.yaw), 0, Math.cos(state.yaw));
   const up = new THREE.Vector3(0,1,0);
 
-  const dist = clamp(10 + spKmh*0.03, 10, 26);
-  const height = clamp(5.8 + spKmh*0.012, 5.8, 10.5);
+  const dist = clamp(10 + sp*0.03, 10, 26);
+  const height = clamp(5.8 + sp*0.012, 5.8, 10.5);
 
-  const carPos = new THREE.Vector3(carState.x, 0, 0);
+  const carPos = new THREE.Vector3(state.x, 0, 0);
   const targetPos = carPos.clone().addScaledVector(forward, -dist).addScaledVector(up, height);
-  const targetLook= carPos.clone().addScaledVector(up, 1.25).addScaledVector(forward, clamp(3+spKmh*0.01, 3, 9));
+  const targetLook= carPos.clone().addScaledVector(up, 1.25).addScaledVector(forward, clamp(3+sp*0.01, 3, 9));
 
-  expLerpVec(camState.pos, targetPos, 6.0, dt);
-  expLerpVec(camState.look, targetLook, 8.0, dt);
+  camera.position.lerp(targetPos, 1 - Math.exp(-6.0*dt));
+  const look = new THREE.Vector3(cam.lx, cam.ly, cam.lz).lerp(targetLook, 1 - Math.exp(-8.0*dt));
+  cam.lx = look.x; cam.ly = look.y; cam.lz = look.z;
 
-  camera.position.copy(camState.pos);
   camera.position.y = clamp(camera.position.y, 2.0, 26.0);
   camera.up.set(0,1,0);
-  camera.lookAt(camState.look);
+  camera.lookAt(look);
 }
 
-// ===== UI =====
-const carSelect = document.getElementById("carSelect");
-CAR_PRESETS.forEach((c, idx)=>{
-  const opt = document.createElement("option");
-  opt.value = String(idx);
-  opt.textContent = c.name;
-  carSelect.appendChild(opt);
+// =========================
+// 7) UI/옵션 연결
+// =========================
+const carSelect = document.getElementById('carSelect');
+CAR_PRESETS.forEach((c, i)=>{
+  const o = document.createElement('option');
+  o.value = String(i);
+  o.textContent = c.name;
+  carSelect.appendChild(o);
 });
-carSelect.addEventListener("change", ()=> loadCar(parseInt(carSelect.value,10)||0));
-document.getElementById("resetBtn").addEventListener("click", ()=> resetCar(true));
+carSelect.addEventListener('change', ()=> loadCar(parseInt(carSelect.value,10)||0));
+
+document.getElementById('resetBtn').addEventListener('click', ()=> resetAll(true));
 
 let paused = false;
-document.getElementById("pauseBtn").addEventListener("click", ()=>{
+document.getElementById('pauseBtn').addEventListener('click', ()=>{
   paused = !paused;
-  document.getElementById("pauseBtn").textContent = paused ? "재개" : "일시정지";
+  document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
 });
 
-function updateStatsPanel(){
-  const p = CAR_PRESETS[carIndex];
-  document.getElementById("stats").innerHTML = `
-    <div><b>성능</b></div>
-    <div>최고속: ${p.vmax} km/h</div>
-    <div>가속: ${p.accel.toFixed(1)} / 브레이크: ${p.brake.toFixed(1)}</div>
-    <div>핸들링: ${p.steer.toFixed(2)} / 그립: ${p.grip.toFixed(2)}</div>
-    <div class="muted" style="margin-top:6px;">v2.3 Hotfix: 레일 충돌 보장 + 밝기 개선 + 빔 유지</div>
-  `;
-}
-
-const hudSpeed = document.getElementById("hudSpeed");
-const hudSafe  = document.getElementById("hudSafe");
-const hudSteer = document.getElementById("hudSteer");
-
-invertSteerEl.addEventListener("change", ()=>{
-  hudSteer.textContent = invertSteerEl.checked ? "A=→ / D=←" : "A=← / D=→";
+// 도로 폭
+const roadWidthInput = document.getElementById('roadWidth');
+const roadWidthVal = document.getElementById('roadWidthVal');
+roadWidthInput.value = String(ROAD.width);
+roadWidthVal.textContent = String(ROAD.width);
+roadWidthInput.addEventListener('input', ()=>{
+  ROAD.width = parseFloat(roadWidthInput.value);
+  roadWidthVal.textContent = String(Math.round(ROAD.width));
+  buildRoad();
 });
 
-// ===== 리사이즈 =====
+// 레일 높이
+const railHeightInput = document.getElementById('railHeight');
+const railHeightVal = document.getElementById('railHeightVal');
+railHeightInput.value = String(RAIL.height);
+railHeightVal.textContent = String(RAIL.height);
+railHeightInput.addEventListener('input', ()=>{
+  RAIL.height = parseFloat(railHeightInput.value);
+  railHeightVal.textContent = String(Math.round(RAIL.height*10)/10);
+  buildRoad();
+});
+
+// =========================
+// 8) 리사이즈
+// =========================
 const vv = window.visualViewport;
-function doResize(){
-  const w = Math.floor(vv?.width ?? window.innerWidth);
-  const h = Math.floor(vv?.height ?? window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+function resize(){
+  const w = Math.floor(vv?.width ?? innerWidth);
+  const h = Math.floor(vv?.height ?? innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
   renderer.setSize(w, h, true);
   camera.aspect = w/h;
   camera.updateProjectionMatrix();
 }
-window.addEventListener("resize", doResize, {passive:true});
-vv?.addEventListener("resize", doResize, {passive:true});
-doResize();
+addEventListener('resize', resize, {passive:true});
+vv?.addEventListener('resize', resize, {passive:true});
+resize();
 
-// ===== 초기 상태 =====
+// =========================
+// 9) 루프
+// =========================
 loadCar(0);
-carSelect.value = "0";
-hudSteer.textContent = "A=← / D=→";
-applyFog();
-applyTimeOfDay();
+carSelect.value = '0';
+applyTime();
+applyFogUI();
 applyHeadlight();
 
-// ===== 루프 =====
+const hudSpeed = document.getElementById('hudSpeed');
+const hudSteer = document.getElementById('hudSteer');
+const hudSlip  = document.getElementById('hudSlip');
+const hudYaw   = document.getElementById('hudYaw');
+const hudSafe  = document.getElementById('hudSafe');
+
 let last = performance.now();
-function tick(now){
-  const rawDt = (now-last)/1000; last = now;
-  const dt = clamp(rawDt, 0, 0.05);
+function loop(now){
+  const dt = clamp((now-last)/1000, 0, 0.05);
+  last = now;
 
   if (!paused){
-    updateCar(dt);
-    updateCamera(dt);
+    step(dt);
+    stepCamera(dt);
   }
 
-  hudSpeed.textContent = String(Math.round(Math.abs(kmhFromMps(carState.speed))));
-  hudSafe.textContent = safeFlag;
+  hudSpeed.textContent = String(Math.round(Math.abs(kmh(state.v))));
+  hudSteer.textContent = String(Math.round(deg(state.steer)));
+  hudSlip.textContent  = String(Math.round(deg(state.slip)));
+  hudYaw.textContent   = String(Math.round(deg(state.r)));
+  hudSafe.textContent  = safeFlag;
 
   renderer.render(scene, camera);
-  requestAnimationFrame(tick);
+  requestAnimationFrame(loop);
 }
-requestAnimationFrame(tick);
+requestAnimationFrame(loop);
 
 </script>
 </body>
