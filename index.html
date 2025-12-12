@@ -513,38 +513,28 @@
       state.vForward *= Math.exp(-drag * dt * 0.12);
 
       // --- Steering ---
-      // 목표: "휙휙" 꺾임 제거 = (1) 속도에 따른 조향 제한 (2) 각속도(요 레이트) 상태를 두고 감쇠
+      // Speed-based steering + 입력 스무딩(휙휙 꺾임 방지)
       const steerLimit = p.steerLimit;
       const steerInputRaw = clamp(state.steer, -1, 1);
 
-      // 입력 스무딩(더 부드럽게)
+      // 입력을 부드럽게 (프레임마다 급격히 변하지 않게)
       state._steerSmoothed ??= 0;
-      const steerSmoothRate = 6.0; // ↓ 더 낮게 = 더 부드럽게
+      const steerSmoothRate = 10.0; // 높을수록 빠르게 반응, 낮을수록 부드러움
       const alpha = 1 - Math.exp(-steerSmoothRate * dt);
-      state._steerSmoothed += (steerInputRaw - state._steerSmoothed) * alpha;
+      state._steerSmoothed = state._steerSmoothed + (steerInputRaw - state._steerSmoothed) * alpha;
       const steerInput = state._steerSmoothed;
 
-      // 고속에서 조향각 자체를 줄임 (전형적인 자동차 조향비 느낌)
-      const speedN = clamp(speedAbs / 32.0, 0, 1);
-      const highSpeedSteerScale = 1.0 - 0.55 * speedN; // 고속일수록 최대 조향각 감소
+      // 고속에서 너무 민감해지지 않도록 완만한 커브
+      const steerGain = (0.18 + 0.62 * clamp(speedAbs / 18.0, 0, 1));
+      const steerAngle = steerInput * steerLimit * steerGain * steerSens;
 
-      // 저속에선 좀 더 먹고, 중속부터는 완만
-      const steerGain = (0.22 + 0.50 * clamp(speedAbs / 20.0, 0, 1));
-      const steerAngle = steerInput * steerLimit * steerGain * steerSens * highSpeedSteerScale;
-
-      // 자전거 모델 기반 요 레이트 목표값
+      // Yaw rate roughly proportional to forward speed and steer angle
+      // Longer "wheelbase" reduces yaw rate (simulate heavier cars)
       const wheelbase = 2.7;
-      const inertia = clamp(p.mass / 1400, 0.85, 1.45);
-      const yawRateTarget = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia;
-
-      // 요 레이트를 상태로 두고 감쇠/추종 (휙휙 방지 핵심)
-      state._yawRate ??= 0;
-      const yawResponse = 7.0;   // 목표 요레이트로 따라가는 속도 (낮을수록 더 부드러움)
-      const yawDamping  = 2.8;   // 흔들림/과민 억제
-      state._yawRate += (yawRateTarget - state._yawRate) * (1 - Math.exp(-yawResponse * dt));
-      state._yawRate *= Math.exp(-yawDamping * dt);
-
-      state.yaw += state._yawRate * dt;
+      const inertia = clamp(p.mass / 1400, 0.85, 1.35);
+      // yawRate를 조금 눌러서(=회전 과민 방지) 현실감 있게
+      const yawRate = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia * 0.72;
+      state.yaw += yawRate * dt;
 
       // --- Lateral dynamics (simple slip model) ---
       // Convert forward movement into lateral slip when turning. Handbrake increases slip.
