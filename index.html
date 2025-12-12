@@ -3,17 +3,24 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Slow Drive 3D — Road Tube + Curves + Car Select</title>
+  <title>Slow Drive 3D — Stable Edition</title>
   <style>
     html,body{height:100%;margin:0;overflow:hidden;background:#060812;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
     canvas{display:block}
+    /* Safari/웹뷰에서 흰 여백 방지: 캔버스는 무조건 화면 전체 고정 */
+    #gl{
+      position:fixed; inset:0;
+      width:100vw; height:100vh;
+      display:block;
+    }
+
     #ui{
       position:fixed;left:14px;top:14px;z-index:10;
       color:#eaf0ff;background:rgba(10,14,26,.55);
       border:1px solid rgba(255,255,255,.10);
       padding:10px 12px;border-radius:14px;backdrop-filter: blur(10px);
       box-shadow:0 12px 32px rgba(0,0,0,.35); user-select:none;
-      max-width:min(680px, calc(100vw - 28px));
+      max-width:min(720px, calc(100vw - 28px));
     }
     .t{font-weight:900;letter-spacing:-.2px}
     .s{color:rgba(234,240,255,.78);font-size:13px;margin-top:6px;line-height:1.35}
@@ -28,6 +35,7 @@
       outline:none;
     }
     .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:2px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06)}
+
     #hud{
       position:fixed;right:14px;top:14px;z-index:10;
       color:#eaf0ff;background:rgba(10,14,26,.55);
@@ -38,6 +46,7 @@
     }
     #hud .big{font-weight:950;font-size:18px}
     #hud .small{color:rgba(234,240,255,.72);font-size:12px;margin-top:2px}
+
     #hint{
       position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
       color:#eaf0ff;background:rgba(10,14,26,.62);
@@ -53,8 +62,10 @@
   </style>
 </head>
 <body>
+  <canvas id="gl"></canvas>
+
   <div id="ui">
-    <div class="t">Slow Drive 3D (Road + Curves + Car Select)</div>
+    <div class="t">Slow Drive 3D — Stable Edition</div>
     <div class="s">
       <span class="kbd">W</span>/<span class="kbd">S</span> 가속/감속 ·
       <span class="kbd">A</span>/<span class="kbd">D</span> 조향 ·
@@ -64,7 +75,6 @@
       <span class="kbd">T</span> 낮/밤 ·
       <span class="kbd">R</span> 리셋
     </div>
-
     <div class="row">
       <label for="carSel">차 선택</label>
       <select id="carSel"></select>
@@ -84,9 +94,9 @@
   <script type="module">
     import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-    // ===== helpers =====
+    // ===== util =====
     const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-    const lerp = (a,b,t)=>a+(b-a)*t;
+    const lerp  = (a,b,t)=>a+(b-a)*t;
 
     function toast(msg){
       const el = document.getElementById('hint');
@@ -96,17 +106,17 @@
       toast._t = setTimeout(()=>el.classList.remove('on'), 950);
     }
 
-    // ===== renderer / scene / camera =====
-    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    // ===== renderer/scene/camera =====
+    const canvas = document.getElementById('gl');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false, powerPreference:"high-performance" });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setSize(innerWidth, innerHeight);
+    renderer.setSize(innerWidth, innerHeight, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    document.body.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 4000);
+    const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 5000);
 
-    // ===== environment =====
+    // ===== env (day/night/fog/stars) =====
     let isNight = false;
     let fogOn = false;
 
@@ -117,12 +127,11 @@
     sun.position.set(80, 160, 70);
     scene.add(sun);
 
-    // stars
     const starGeo = new THREE.BufferGeometry();
-    const starCount = 1600;
-    const starPos = new Float32Array(starCount * 3);
+    const starCount = 1400;
+    const starPos = new Float32Array(starCount*3);
     for(let i=0;i<starCount;i++){
-      const r = 800 + Math.random()*1200;
+      const r = 900 + Math.random()*1200;
       const th = Math.random()*Math.PI*2;
       const ph = Math.random()*Math.PI*0.45;
       starPos[i*3+0] = Math.cos(th)*Math.sin(ph)*r;
@@ -139,23 +148,22 @@
       if(!isNight){
         scene.background = new THREE.Color(0x9fc7ff);
         hemi.intensity = 0.95;
-        sun.intensity = 1.15;
+        sun.intensity  = 1.15;
         sun.color.setHex(0xffffff);
         stars.material.opacity = 0.0;
       }else{
         scene.background = new THREE.Color(0x050611);
         hemi.intensity = 0.26;
-        sun.intensity = 0.35;
+        sun.intensity  = 0.35;
         sun.color.setHex(0xaac6ff);
         stars.material.opacity = 0.9;
       }
-      scene.fog = fogOn ? new THREE.Fog(isNight ? 0x050611 : 0x9fc7ff, 120, 700) : null;
+      scene.fog = fogOn ? new THREE.Fog(isNight ? 0x050611 : 0x9fc7ff, 140, 820) : null;
       document.getElementById('mode').textContent = `${isNight ? "NIGHT" : "DAY"} · FOG: ${fogOn ? "ON" : "OFF"}`;
     }
     applyEnv();
 
-    // ===== car profiles =====
-    // topSpeed in km/h. accelTier mapped into acceleration curve (low/mid/high behavior).
+    // ===== cars =====
     const CAR_PROFILES = [
       { id:"ioniq5n", name:"현대 아이오닉 5 N", topSpeed:150, accelTier:"하",   accelMul:0.72, color:0x3dd6ff, aero:1.06, grip:1.15 },
       { id:"furai",   name:"Mazda Furai",        topSpeed:250, accelTier:"중",   accelMul:0.98, color:0xff5f2e, aero:1.02, grip:1.05 },
@@ -172,35 +180,25 @@
       sel.appendChild(opt);
     });
 
-    // ===== Car model builder (improved silhouettes) =====
     function buildCar(profile){
       const g = new THREE.Group();
 
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: profile.color,
-        roughness: 0.35,
-        metalness: 0.16,
-        emissive: 0x000000
-      });
-      const glassMat = new THREE.MeshStandardMaterial({
-        color: 0x11162a,
-        roughness: 0.18,
-        metalness: 0.0
-      });
+      const bodyMat = new THREE.MeshStandardMaterial({ color:profile.color, roughness:0.35, metalness:0.16 });
+      const glassMat= new THREE.MeshStandardMaterial({ color:0x11162a, roughness:0.18, metalness:0.0 });
       const darkMat = new THREE.MeshStandardMaterial({ color:0x0f1220, roughness:0.9, metalness:0.0 });
 
-      // wheels
-      const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 14);
+      // wheels (share geo)
+      const wheelGeo = new THREE.CylinderGeometry(0.36,0.36,0.28,14);
       wheelGeo.rotateZ(Math.PI/2);
-      function wheel(x,y,z){
+      const wheels = [];
+      const addWheel = (x,y,z)=>{
         const w = new THREE.Mesh(wheelGeo, darkMat);
         w.position.set(x,y,z);
         g.add(w);
-        return w;
-      }
-      const wheels = [];
+        wheels.push(w);
+      };
 
-      // headlights + underglow
+      // lights
       const headL = new THREE.SpotLight(0xdde9ff, 0.0, 95, Math.PI/9, 0.55, 1.0);
       headL.position.set(-0.55, 0.65, 1.85);
       headL.target.position.set(-0.55, 0.2, 38);
@@ -215,253 +213,201 @@
       under.position.set(0, 0.18, 0.1);
       g.add(under);
 
-      // body shapes per car
-      if(profile.id === "ioniq5n"){
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.60, 3.95), bodyMat);
-        base.position.set(0, 0.58, 0);
-        g.add(base);
-
-        const roof = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.55, 2.05), bodyMat);
-        roof.position.set(0, 1.03, -0.22);
-        g.add(roof);
-
-        const glass = new THREE.Mesh(new THREE.BoxGeometry(1.50, 0.42, 1.70), glassMat);
-        glass.position.set(0, 1.06, -0.22);
-        g.add(glass);
-
-        const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.12, 0.55), darkMat);
-        spoiler.position.set(0, 1.14, -1.72);
-        g.add(spoiler);
-
-        wheels.push(wheel(-0.86, 0.30, 1.42), wheel(0.86, 0.30, 1.42), wheel(-0.86, 0.30, -1.42), wheel(0.86, 0.30, -1.42));
-      }
-      else if(profile.id === "furai"){
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.42, 3.65), bodyMat);
-        base.position.set(0, 0.48, 0);
-        g.add(base);
-
-        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.78, 1.30, 10), bodyMat);
-        nose.rotation.x = Math.PI/2;
-        nose.position.set(0, 0.48, 2.12);
-        g.add(nose);
-
-
-        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.22, 0.42, 1.35), glassMat);
-        canopy.position.set(0, 0.82, 0.25);
-        g.add(canopy);
-
-        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.58, 1.25), darkMat);
-        fin.position.set(0, 1.08, -0.70);
-        g.add(fin);
-
-        wheels.push(wheel(-0.80, 0.26, 1.28), wheel(0.80, 0.26, 1.28), wheel(-0.80, 0.26, -1.28), wheel(0.80, 0.26, -1.28));
-      }
-      else if(profile.id === "huracan"){
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.38, 3.35), bodyMat);
-        base.position.set(0, 0.44, 0);
-        g.add(base);
-
-        const hood = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.22, 1.45), bodyMat);
-        hood.position.set(0, 0.62, 1.05);
-        g.add(hood);
-
-        const cockpit = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.35, 1.05), glassMat);
-        cockpit.position.set(0, 0.80, -0.05);
-        g.add(cockpit);
-
-        const rear = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.22, 1.20), darkMat);
-        rear.position.set(0, 0.62, -1.16);
-        g.add(rear);
-
-        wheels.push(wheel(-0.87, 0.25, 1.15), wheel(0.87, 0.25, 1.15), wheel(-0.87, 0.25, -1.15), wheel(0.87, 0.25, -1.15));
-      }
-      else if(profile.id === "agera"){
-        const base = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.38, 3.85), bodyMat);
-        base.position.set(0, 0.44, 0);
-        g.add(base);
-
-        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.72, 1.18, 12), bodyMat);
-        nose.rotation.x = Math.PI/2;
-        nose.position.set(0, 0.44, 2.40);
-        g.add(nose);
-
-        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.28, 0.40, 1.30), glassMat);
-        canopy.position.set(0, 0.82, 0.26);
-        g.add(canopy);
-
-        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.92, 0.10, 0.60), darkMat);
-        wing.position.set(0, 0.98, -1.95);
-        g.add(wing);
-
-        const wingSt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), darkMat);
-        const stL = wingSt.clone(); stL.position.set(-0.78, 0.83, -1.78);
-        const stR = wingSt.clone(); stR.position.set(0.78, 0.83, -1.78);
-        g.add(stL); g.add(stR);
-
-        wheels.push(wheel(-0.87, 0.25, 1.38), wheel(0.87, 0.25, 1.38), wheel(-0.87, 0.25, -1.38), wheel(0.87, 0.25, -1.38));
-      }
-      else {
-        const base = new THREE.Mesh(new THREE.BoxGeometry(2.08, 0.42, 4.45), bodyMat);
-        base.position.set(0, 0.48, 0);
-        g.add(base);
-
-        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.88, 1.60, 14), bodyMat);
-        nose.rotation.x = Math.PI/2;
-        nose.position.set(0, 0.48, 2.92);
-        g.add(nose);
-
-        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.45, 1.40), glassMat);
-        canopy.position.set(0, 0.86, 0.18);
-        g.add(canopy);
-
-        const rearBlock = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.28, 1.35), darkMat);
-        rearBlock.position.set(0, 0.62, -2.10);
-        g.add(rearBlock);
-
-        wheels.push(wheel(-0.96, 0.26, 1.60), wheel(0.96, 0.26, 1.60), wheel(-0.96, 0.26, -1.60), wheel(0.96, 0.26, -1.60));
+      // body shapes
+      if(profile.id==="ioniq5n"){
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.95,0.60,3.95), bodyMat); base.position.set(0,0.58,0); g.add(base);
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(1.65,0.55,2.05), bodyMat); roof.position.set(0,1.03,-0.22); g.add(roof);
+        const glass= new THREE.Mesh(new THREE.BoxGeometry(1.50,0.42,1.70), glassMat); glass.position.set(0,1.06,-0.22); g.add(glass);
+        const spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.12,0.55), darkMat); spoiler.position.set(0,1.14,-1.72); g.add(spoiler);
+        addWheel(-0.86,0.30, 1.42); addWheel(0.86,0.30, 1.42); addWheel(-0.86,0.30,-1.42); addWheel(0.86,0.30,-1.42);
+      }else if(profile.id==="furai"){
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.75,0.42,3.65), bodyMat); base.position.set(0,0.48,0); g.add(base);
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.78,1.30,10), bodyMat); nose.rotation.x=Math.PI/2; nose.position.set(0,0.48,2.12); g.add(nose);
+        const canopy=new THREE.Mesh(new THREE.BoxGeometry(1.22,0.42,1.35), glassMat); canopy.position.set(0,0.82,0.25); g.add(canopy);
+        const fin  = new THREE.Mesh(new THREE.BoxGeometry(0.10,0.58,1.25), darkMat); fin.position.set(0,1.08,-0.70); g.add(fin);
+        addWheel(-0.80,0.26, 1.28); addWheel(0.80,0.26, 1.28); addWheel(-0.80,0.26,-1.28); addWheel(0.80,0.26,-1.28);
+      }else if(profile.id==="huracan"){
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.88,0.38,3.35), bodyMat); base.position.set(0,0.44,0); g.add(base);
+        const hood = new THREE.Mesh(new THREE.BoxGeometry(1.78,0.22,1.45), bodyMat); hood.position.set(0,0.62,1.05); g.add(hood);
+        const cockpit=new THREE.Mesh(new THREE.BoxGeometry(1.38,0.35,1.05), glassMat); cockpit.position.set(0,0.80,-0.05); g.add(cockpit);
+        const rear = new THREE.Mesh(new THREE.BoxGeometry(1.78,0.22,1.20), darkMat); rear.position.set(0,0.62,-1.16); g.add(rear);
+        addWheel(-0.87,0.25, 1.15); addWheel(0.87,0.25, 1.15); addWheel(-0.87,0.25,-1.15); addWheel(0.87,0.25,-1.15);
+      }else if(profile.id==="agera"){
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.88,0.38,3.85), bodyMat); base.position.set(0,0.44,0); g.add(base);
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.72,1.18,12), bodyMat); nose.rotation.x=Math.PI/2; nose.position.set(0,0.44,2.40); g.add(nose);
+        const canopy=new THREE.Mesh(new THREE.BoxGeometry(1.28,0.40,1.30), glassMat); canopy.position.set(0,0.82,0.26); g.add(canopy);
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.92,0.10,0.60), darkMat); wing.position.set(0,0.98,-1.95); g.add(wing);
+        const stGeo = new THREE.BoxGeometry(0.12,0.35,0.12);
+        const stL = new THREE.Mesh(stGeo, darkMat); stL.position.set(-0.78,0.83,-1.78); g.add(stL);
+        const stR = new THREE.Mesh(stGeo, darkMat); stR.position.set( 0.78,0.83,-1.78); g.add(stR);
+        addWheel(-0.87,0.25, 1.38); addWheel(0.87,0.25, 1.38); addWheel(-0.87,0.25,-1.38); addWheel(0.87,0.25,-1.38);
+      }else{ // devel
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.08,0.42,4.45), bodyMat); base.position.set(0,0.48,0); g.add(base);
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.88,1.60,14), bodyMat); nose.rotation.x=Math.PI/2; nose.position.set(0,0.48,2.92); g.add(nose);
+        const canopy=new THREE.Mesh(new THREE.BoxGeometry(1.38,0.45,1.40), glassMat); canopy.position.set(0,0.86,0.18); g.add(canopy);
+        const rear = new THREE.Mesh(new THREE.BoxGeometry(2.05,0.28,1.35), darkMat); rear.position.set(0,0.62,-2.10); g.add(rear);
+        addWheel(-0.96,0.26, 1.60); addWheel(0.96,0.26, 1.60); addWheel(-0.96,0.26,-1.60); addWheel(0.96,0.26,-1.60);
       }
 
       g.userData.wheels = wheels;
       g.userData.headL = headL;
       g.userData.headR = headR;
       g.userData.under = under;
-
       return g;
     }
 
-    // ===== Road (single smooth ribbon geometry) =====
-    // We maintain a rolling set of centerline points ahead, and rebuild a "ribbon" mesh sometimes.
-    const ROAD_WIDTH = 10.0;
-    const SHOULDER_WIDTH = ROAD_WIDTH * 2.25;
+    let currentCar = CAR_PROFILES[0];
+    let car = buildCar(currentCar);
+    scene.add(car);
 
-    const ROAD_SAMPLES = 260;      // more = smoother
-    const ROAD_SPACING = 7.0;      // meters between samples
-    const ROAD_LENGTH = ROAD_SAMPLES * ROAD_SPACING;
+    function applyCarProfile(p){
+      currentCar = p;
+      scene.remove(car);
+      car = buildCar(currentCar);
+      scene.add(car);
 
-    // Materials
-    const matRoad = new THREE.MeshStandardMaterial({ color:0x2b2f3a, roughness:0.95, metalness:0.0 });
-    const matShoulder = new THREE.MeshStandardMaterial({ color:0x1b1e26, roughness:1.0, metalness:0.0 });
-    const matLine = new THREE.MeshStandardMaterial({ color:0xe7ecff, roughness:0.35, metalness:0.0 });
-
-    function buildRibbonGeometry(width){
-      // placeholder; will be filled by updateRibbon()
-      const geo = new THREE.BufferGeometry();
-      const vCount = ROAD_SAMPLES * 2;
-      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vCount * 3), 3));
-      geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(vCount * 3), 3));
-      geo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(vCount * 2), 2));
-      // indices
-      const idx = new Uint32Array((ROAD_SAMPLES - 1) * 6);
-      let k = 0;
-      for(let i=0;i<ROAD_SAMPLES-1;i++){
-        const a = i*2;
-        const b = i*2+1;
-        const c = (i+1)*2;
-        const d = (i+1)*2+1;
-        // two triangles: a,c,b and b,c,d
-        idx[k++] = a; idx[k++] = c; idx[k++] = b;
-        idx[k++] = b; idx[k++] = c; idx[k++] = d;
-      }
-      geo.setIndex(new THREE.BufferAttribute(idx, 1));
-      geo.computeBoundingSphere();
-      geo.userData.width = width;
-      return geo;
+      document.getElementById('carName').textContent = `CAR: ${p.name}`;
+      document.getElementById('carSpec').textContent = `최고속도 ${p.topSpeed} km/h · 가속 ${p.accelTier}`;
+      toast(`${p.name} 선택됨`);
     }
 
-    const roadGeo = buildRibbonGeometry(ROAD_WIDTH);
-    const shoulderGeo = buildRibbonGeometry(SHOULDER_WIDTH);
+    sel.value = currentCar.id;
+    applyCarProfile(currentCar);
 
-    const roadMesh = new THREE.Mesh(roadGeo, matRoad);
-    roadMesh.position.y = 0.02;
-    scene.add(roadMesh);
+    sel.addEventListener('change', ()=>{
+      const p = CAR_PROFILES.find(x=>x.id===sel.value) || CAR_PROFILES[0];
+      applyCarProfile(p);
+      state.speed = Math.min(state.speed, (p.topSpeed/3.6) * 0.65);
+    });
 
-    const shoulderMesh = new THREE.Mesh(shoulderGeo, matShoulder);
-    shoulderMesh.position.y = 0.0;
-    scene.add(shoulderMesh);
+    // ===== road ribbon (stable typed arrays) =====
+    const ROAD_WIDTH = 10.0;
+    const SHOULDER_W = ROAD_WIDTH * 2.25;
 
-    // lane lines as thin ribbons
-    const lineGeoCenter = buildRibbonGeometry(0.22);
-    const lineGeoL = buildRibbonGeometry(0.22);
-    const lineGeoR = buildRibbonGeometry(0.22);
-    const lineCenter = new THREE.Mesh(lineGeoCenter, matLine); lineCenter.position.y = 0.035; scene.add(lineCenter);
-    const lineL = new THREE.Mesh(lineGeoL, matLine); lineL.position.y = 0.035; scene.add(lineL);
-    const lineR = new THREE.Mesh(lineGeoR, matLine); lineR.position.y = 0.035; scene.add(lineR);
+    const N = 240;          // samples
+    const SPACING = 7.0;    // meters
+    const LENGTH = N * SPACING;
 
-    // Centerline + curvature generator
-    const centers = [];
-    const headings = []; // yaw
+    // centerline buffers
+    const cx = new Float32Array(N);
+    const cz = new Float32Array(N);
+    const yawArr = new Float32Array(N);
+
     let yaw = 0;
     let curv = 0;
     let curvTarget = 0;
     let curvBlend = 0;
 
     function pickCurvTarget(){
-      const base = (Math.random()*2-1) * 0.0012; // gentle
+      const base = (Math.random()*2-1) * 0.0012;
       const spice = (Math.random()<0.22) ? (Math.random()*2-1) * 0.0024 : 0;
       curvTarget = clamp(base + spice, -0.0030, 0.0030);
     }
     pickCurvTarget();
 
     function initRoad(){
-      centers.length = 0;
-      headings.length = 0;
-      yaw = 0;
-      curv = 0;
-      curvBlend = 0;
-      pickCurvTarget();
-
-      let p = new THREE.Vector3(0,0,0);
-      for(let i=0;i<ROAD_SAMPLES;i++){
-        centers.push(p.clone());
-        headings.push(yaw);
+      yaw = 0; curv = 0; curvBlend = 0; pickCurvTarget();
+      let x=0, z=0;
+      for(let i=0;i<N;i++){
+        cx[i]=x; cz[i]=z; yawArr[i]=yaw;
         // advance
-        const dir = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
-        p = p.clone().addScaledVector(dir, ROAD_SPACING);
-        // evolve curvature slowly with distance
+        const sx = Math.sin(yaw), czm = -Math.cos(yaw);
+        x += sx*SPACING;
+        z += czm*SPACING;
         curvBlend += 0.004;
-        if(curvBlend >= 1){
-          curvBlend = 0;
-          pickCurvTarget();
-        }
+        if(curvBlend>=1){ curvBlend=0; pickCurvTarget(); }
         curv = lerp(curv, curvTarget, 0.02);
-        yaw = clamp(yaw + curv * ROAD_SPACING, -1.1, 1.1);
+        yaw = clamp(yaw + curv*SPACING, -1.1, 1.1);
       }
     }
-
     initRoad();
 
-    // Rebuild ribbon vertices from centers
-    function updateRibbon(geo, offsetX){
-      // offsetX: lateral shift of the whole ribbon (for lane lines)
+    function makeRibbonGeo(width){
+      const geo = new THREE.BufferGeometry();
+      geo.userData.width = width;
+
+      const vCount = N*2;
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(vCount*3), 3));
+      geo.setAttribute('normal',   new THREE.BufferAttribute(new Float32Array(vCount*3), 3));
+      geo.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(vCount*2), 2));
+
+      const idx = new Uint32Array((N-1)*6);
+      let k=0;
+      for(let i=0;i<N-1;i++){
+        const a=i*2, b=i*2+1, c=(i+1)*2, d=(i+1)*2+1;
+        idx[k++]=a; idx[k++]=c; idx[k++]=b;
+        idx[k++]=b; idx[k++]=c; idx[k++]=d;
+      }
+      geo.setIndex(new THREE.BufferAttribute(idx,1));
+      return geo;
+    }
+
+    // dashed texture (for center line)
+    function makeDashTexture(){
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 16;
+      const g = c.getContext('2d');
+      g.clearRect(0,0,c.width,c.height);
+      g.fillStyle = "rgba(255,255,255,1)";
+      g.fillRect(0, 6, 28, 4);     // dash
+      // gap then another dash
+      g.fillRect(38, 6, 18, 4);
+      const tex = new THREE.CanvasTexture(c);
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(1, 40);       // v방향 반복
+      tex.anisotropy = 2;
+      return tex;
+    }
+
+    const matRoad = new THREE.MeshStandardMaterial({ color:0x2b2f3a, roughness:0.95, metalness:0.0 });
+    const matShoulder = new THREE.MeshStandardMaterial({ color:0x1b1e26, roughness:1.0, metalness:0.0 });
+    const matLineSolid = new THREE.MeshStandardMaterial({ color:0xe7ecff, roughness:0.35, metalness:0.0 });
+
+    const dashTex = makeDashTexture();
+    const matDash = new THREE.MeshBasicMaterial({ color:0xffffff, map:dashTex, transparent:true, opacity:0.95 });
+
+    const geoShoulder = makeRibbonGeo(SHOULDER_W);
+    const geoRoad = makeRibbonGeo(ROAD_WIDTH);
+    const geoLineC = makeRibbonGeo(0.22);
+    const geoLineL = makeRibbonGeo(0.22);
+    const geoLineR = makeRibbonGeo(0.22);
+
+    const shoulder = new THREE.Mesh(geoShoulder, matShoulder); shoulder.position.y=0.0; scene.add(shoulder);
+    const road     = new THREE.Mesh(geoRoad, matRoad);        road.position.y=0.02; scene.add(road);
+    const lineC    = new THREE.Mesh(geoLineC, matDash);       lineC.position.y=0.035; scene.add(lineC);
+    const lineL    = new THREE.Mesh(geoLineL, matLineSolid);  lineL.position.y=0.035; scene.add(lineL);
+    const lineR    = new THREE.Mesh(geoLineR, matLineSolid);  lineR.position.y=0.035; scene.add(lineR);
+
+    // update ribbon vertices with an offset (consume)
+    function writeRibbon(geo, offsetX, offX, offZ){
       const width = geo.userData.width;
       const pos = geo.attributes.position.array;
       const nor = geo.attributes.normal.array;
       const uv  = geo.attributes.uv.array;
 
-      for(let i=0;i<ROAD_SAMPLES;i++){
-        const c = centers[i];
-        const y = headings[i];
-        const right = new THREE.Vector3(Math.cos(y), 0, Math.sin(y)); // perpendicular right
-        const half = width * 0.5;
+      const half = width*0.5;
+      for(let i=0;i<N;i++){
+        const y = yawArr[i];
+        const rx = Math.cos(y), rz = Math.sin(y); // right vector
+        const x = cx[i]-offX;
+        const z = cz[i]-offZ;
 
-        const leftP  = c.clone().addScaledVector(right, (-half + offsetX));
-        const rightP = c.clone().addScaledVector(right, ( half + offsetX));
+        const lx = x + rx*(-half + offsetX);
+        const lz = z + rz*(-half + offsetX);
+        const rxp= x + rx*( half + offsetX);
+        const rzp= z + rz*( half + offsetX);
 
-        // positions
-        const base = i*2*3;
-        pos[base+0] = leftP.x;  pos[base+1] = leftP.y;  pos[base+2] = leftP.z;
-        pos[base+3] = rightP.x; pos[base+4] = rightP.y; pos[base+5] = rightP.z;
+        const p = i*2*3;
+        pos[p+0]=lx;  pos[p+1]=0; pos[p+2]=lz;
+        pos[p+3]=rxp; pos[p+4]=0; pos[p+5]=rzp;
 
-        // normals (up)
-        nor[base+0] = 0; nor[base+1] = 1; nor[base+2] = 0;
-        nor[base+3] = 0; nor[base+4] = 1; nor[base+5] = 0;
+        nor[p+0]=0; nor[p+1]=1; nor[p+2]=0;
+        nor[p+3]=0; nor[p+4]=1; nor[p+5]=0;
 
-        // uv: u across width, v along length
-        const v = i / (ROAD_SAMPLES-1);
-        const u0 = 0, u1 = 1;
-        const buv = i*2*2;
-        uv[buv+0] = u0; uv[buv+1] = v * 22; // repeat-ish
-        uv[buv+2] = u1; uv[buv+3] = v * 22;
+        const v = i/(N-1);
+        const t = i*2*2;
+        uv[t+0]=0; uv[t+1]=v*22;
+        uv[t+2]=1; uv[t+3]=v*22;
       }
 
       geo.attributes.position.needsUpdate = true;
@@ -470,189 +416,103 @@
       geo.computeBoundingSphere();
     }
 
-    // Dash effect: make center line segments blink by material opacity animation (cheap)
-    let dashPhase = 0;
-
-    // ===== Scenery (trees/hills) =====
-    const scenery = new THREE.Group();
-    scene.add(scenery);
+    // ===== scenery (simple, stable; 적당히 가볍게) =====
+    const scenery = new THREE.Group(); scene.add(scenery);
 
     const treeMatTop = new THREE.MeshStandardMaterial({ color:0x2dd4bf, roughness:0.9 });
     const treeMatTrk = new THREE.MeshStandardMaterial({ color:0x5b3a22, roughness:1.0 });
-    const hillMat = new THREE.MeshStandardMaterial({ color:0x2a3252, roughness:1.0 });
+    const hillMat    = new THREE.MeshStandardMaterial({ color:0x2a3252, roughness:1.0 });
 
     const treeGeoTop = new THREE.ConeGeometry(1.2, 3.5, 7);
     const treeGeoTrk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6);
-    const hillGeo = new THREE.SphereGeometry(10, 10, 8);
+    const hillGeo    = new THREE.SphereGeometry(10, 10, 8);
 
     const deco = [];
     function addTree(){
       const t = new THREE.Group();
       const s = 0.7 + Math.random()*0.9;
       const trunk = new THREE.Mesh(treeGeoTrk, treeMatTrk);
-      trunk.position.y = 0.8*s; trunk.scale.setScalar(s);
-      t.add(trunk);
+      trunk.position.y = 0.8*s; trunk.scale.setScalar(s); t.add(trunk);
       const top = new THREE.Mesh(treeGeoTop, treeMatTop);
-      top.position.y = 3.1*s; top.scale.setScalar(s);
-      t.add(top);
+      top.position.y = 3.1*s; top.scale.setScalar(s); t.add(top);
       scenery.add(t);
-      deco.push({ obj:t, kind:"tree", u:Math.random(), side:Math.random()<0.5?-1:1, xOff: (ROAD_WIDTH*0.9 + 6 + Math.random()*26) });
+      deco.push({ obj:t, kind:"tree", u:Math.random(), side:Math.random()<0.5?-1:1, xOff:(ROAD_WIDTH*0.9 + 6 + Math.random()*26) });
     }
     function addHill(){
       const h = new THREE.Mesh(hillGeo, hillMat);
       const s = 0.9 + Math.random()*1.8;
       h.scale.set(1.7*s, 0.7*s, 1.2*s);
       scenery.add(h);
-      deco.push({ obj:h, kind:"hill", u:Math.random(), side:Math.random()<0.5?-1:1, xOff: (ROAD_WIDTH*0.9 + 28 + Math.random()*70), y: 4*s });
+      deco.push({ obj:h, kind:"hill", u:Math.random(), side:Math.random()<0.5?-1:1, xOff:(ROAD_WIDTH*0.9 + 28 + Math.random()*70), y:4*s });
     }
-    for(let i=0;i<160;i++) addTree();
-    for(let i=0;i<40;i++) addHill();
+    for(let i=0;i<150;i++) addTree();
+    for(let i=0;i<38;i++) addHill();
 
-    // place scenery along road by param u in [0,1)
-    function placeDeco(){
+    function placeDeco(offX, offZ){
       for(const d of deco){
-        // convert u -> sample index
-        const idx = clamp(Math.floor(d.u * (ROAD_SAMPLES-2)) + 1, 1, ROAD_SAMPLES-2);
-        const c = centers[idx];
-        const y = headings[idx];
-        const right = new THREE.Vector3(Math.cos(y), 0, Math.sin(y));
+        const idx = clamp((d.u*(N-2))|0, 1, N-2);
+        const y = yawArr[idx];
+        const rx = Math.cos(y), rz = Math.sin(y);
+        const x = cx[idx]-offX;
+        const z = cz[idx]-offZ;
+
         const side = d.side;
-        const x = side * d.xOff;
+        const ox = side*d.xOff;
+        const px = x + rx*ox;
+        const pz = z + rz*ox;
 
-        const pos = c.clone().addScaledVector(right, x);
-        if(d.kind==="tree"){
-          d.obj.position.set(pos.x, 0, pos.z);
-          d.obj.rotation.y = y;
-        }else{
-          d.obj.position.set(pos.x, d.y || 6, pos.z);
-          d.obj.rotation.y = y*0.25;
-        }
+        d.obj.position.set(px, d.kind==="hill" ? (d.y||6) : 0, pz);
+        d.obj.rotation.y = (d.kind==="hill") ? y*0.25 : y;
       }
     }
 
-    // ===== Player =====
+    // ===== physics =====
     const keys = new Set();
-    addEventListener('keydown', (e)=>{
-      keys.add(e.code);
+    const state = { speed:0, dist:0, laneX:0, laneV:0 };
 
-      if(e.code === "KeyF"){ fogOn = !fogOn; applyEnv(); toast(`FOG ${fogOn ? "ON" : "OFF"}`); }
-      if(e.code === "KeyT"){ isNight = !isNight; applyEnv(); toast(isNight ? "NIGHT MODE" : "DAY MODE"); }
-      if(e.code === "KeyR"){ resetAll(); toast("RESET"); }
-
-      if(e.code.startsWith("Digit")){
-        const n = parseInt(e.code.replace("Digit",""),10);
-        if(n>=1 && n<=5){
-          sel.value = CAR_PROFILES[n-1].id;
-          sel.dispatchEvent(new Event('change'));
-        }
-      }
-    });
-    addEventListener('keyup', (e)=> keys.delete(e.code));
-
-    const state = {
-      speed: 0,       // m/s
-      dist: 0,        // meters
-      laneX: 0,
-      laneV: 0
-    };
-
-    let currentCar = CAR_PROFILES[0];
-    let car = buildCar(currentCar);
-    scene.add(car);
-
-    function applyCarProfile(p){
-      currentCar = p;
-
-      scene.remove(car);
-      car = buildCar(currentCar);
-      scene.add(car);
-
-      document.getElementById('carName').textContent = `CAR: ${p.name}`;
-      document.getElementById('carSpec').textContent = `최고속도 ${p.topSpeed} km/h · 가속 ${p.accelTier}`;
-      toast(`${p.name} 선택됨`);
-
-      // soften speed on change
-      const maxV = (p.topSpeed/3.6);
-      state.speed = Math.min(state.speed, maxV * 0.6);
-    }
-
-    sel.value = CAR_PROFILES[0].id;
-    CAR_PROFILES.forEach((p,i)=>{ if(p.id===sel.value) applyCarProfile(p); });
-
-    sel.addEventListener('change', ()=>{
-      const p = CAR_PROFILES.find(x=>x.id===sel.value) || CAR_PROFILES[0];
-      applyCarProfile(p);
-    });
-
-    function resetAll(){
-      state.speed = 0;
-      state.dist = 0;
-      state.laneX = 0;
-      state.laneV = 0;
-      initRoad();
-      // randomize scenery
-      for(const d of deco){
-        d.u = Math.random();
-        d.side = Math.random()<0.5?-1:1;
-        if(d.kind==="tree") d.xOff = (ROAD_WIDTH*0.9 + 6 + Math.random()*26);
-        else { d.xOff = (ROAD_WIDTH*0.9 + 28 + Math.random()*70); d.y = 4*(0.9+Math.random()*1.8); }
-      }
-    }
-
-    // ===== Acceleration curves (tier -> how much power remains at high speed) =====
-    // returns multiplier based on speed ratio r = v/maxV
     function powerCurve(tier, r){
-      // r in [0..1+]
       r = clamp(r, 0, 1.2);
-      if(tier==="하"){
-        // dies quickly
-        return Math.pow(1 - r, 1.55) + 0.08;
-      }
-      if(tier==="중"){
-        return Math.pow(1 - r, 1.25) + 0.10;
-      }
-      if(tier==="중상"){
-        return Math.pow(1 - r, 1.05) + 0.12;
-      }
-      if(tier==="상"){
-        return Math.pow(1 - r, 0.88) + 0.14;
-      }
-      // 최상: stays strong
-      return Math.pow(1 - r, 0.62) + 0.18;
+      if(tier==="하")   return Math.pow(1-r, 1.55) + 0.08;
+      if(tier==="중")   return Math.pow(1-r, 1.25) + 0.10;
+      if(tier==="중상") return Math.pow(1-r, 1.05) + 0.12;
+      if(tier==="상")   return Math.pow(1-r, 0.88) + 0.14;
+      return Math.pow(1-r, 0.62) + 0.18; // 최상
     }
 
-    // ===== Road scrolling =====
-    // We keep the camera+car near origin by shifting the whole road buffers backward
-    // by "consuming" distance and generating new points at the far end.
-    let consume = 0; // meters advanced since last sample pop
+    // ===== road advance (stable) =====
+    let consume = 0; // meters into first segment
 
-    function advanceRoadBy(dz){
+    function advanceRoad(dz){
       consume += dz;
 
-      while(consume >= ROAD_SPACING){
-        consume -= ROAD_SPACING;
+      while(consume >= SPACING){
+        consume -= SPACING;
 
-        // pop the first center and append a new one at the end
-        const last = centers[centers.length-1];
-        const lastYaw = headings[headings.length-1];
+        // shift buffers left by 1 (typed array copyWithin: 빠르고 안정)
+        cx.copyWithin(0, 1);
+        cz.copyWithin(0, 1);
+        yawArr.copyWithin(0, 1);
 
-        // evolve curvature slowly
+        // generate new sample at end
+        const lastX = cx[N-2];
+        const lastZ = cz[N-2];
+        const lastYaw = yawArr[N-2];
+
         curvBlend += 0.004;
         if(curvBlend >= 1){ curvBlend = 0; pickCurvTarget(); }
         curv = lerp(curv, curvTarget, 0.02);
 
-        const newYaw = clamp(lastYaw + curv * ROAD_SPACING, -1.1, 1.1);
-        const dir = new THREE.Vector3(Math.sin(newYaw), 0, -Math.cos(newYaw));
-        const next = last.clone().addScaledVector(dir, ROAD_SPACING);
+        const newYaw = clamp(lastYaw + curv*SPACING, -1.1, 1.1);
+        const sx = Math.sin(newYaw), czm = -Math.cos(newYaw);
 
-        centers.shift();
-        headings.shift();
-        centers.push(next);
-        headings.push(newYaw);
+        cx[N-1] = lastX + sx*SPACING;
+        cz[N-1] = lastZ + czm*SPACING;
+        yawArr[N-1] = newYaw;
 
-        // scenery params move forward (u decreases); recycle when passed
+        // scenery param 이동(앞에서 지나가면 뒤로 재생성)
+        const du = 1/(N-1);
         for(const d of deco){
-          d.u -= 1/(ROAD_SAMPLES-1);
+          d.u -= du;
           if(d.u < 0.02){
             d.u = 0.95 + Math.random()*0.04;
             d.side = Math.random()<0.5?-1:1;
@@ -662,24 +522,20 @@
         }
       }
 
-      // apply partial consume as an offset by subtracting along heading[0] direction
-      const y0 = headings[0];
-      const fwd0 = new THREE.Vector3(Math.sin(y0), 0, -Math.cos(y0));
-      const off = fwd0.clone().multiplyScalar(consume);
-
-      // shift all centers backward by off for rendering only
-      // (we avoid mutating centers permanently; just create temp view)
-      // We'll do this cheaply by writing shifted positions into temporary arrays each rebuild.
-      return off;
+      // partial consume offset along heading[0]
+      const y0 = yawArr[0];
+      const offX = Math.sin(y0) * consume;
+      const offZ = -Math.cos(y0) * consume;
+      return { offX, offZ };
     }
 
-    // ===== Camera + shake =====
+    // ===== camera (lower + shake) =====
     let shakeT = 0;
-    function cameraShake(v, dt){
-      // v in m/s. More shake at high speed.
-      const intensity = clamp((v*3.6 - 60) / 260, 0, 1);
-      shakeT += dt * (2.0 + intensity*6.0);
-      const s = intensity * 0.10;
+    function getShake(v, dt){
+      const kmh = v*3.6;
+      const intensity = clamp((kmh-60)/260, 0, 1);
+      shakeT += dt*(2.0 + intensity*6.0);
+      const s = intensity*0.10;
       return {
         x: (Math.sin(shakeT*3.1) + Math.sin(shakeT*1.7))*0.5*s,
         y: (Math.sin(shakeT*2.4))*0.35*s,
@@ -687,10 +543,41 @@
       };
     }
 
-    // ===== main loop =====
-    let last = performance.now();
-    let rebuildTimer = 0;
+    // ===== input (단일 리스너로만 처리: 중복 방지) =====
+    addEventListener('keydown', (e)=>{
+      keys.add(e.code);
 
+      if(e.code==="KeyF" && !e.repeat){ fogOn = !fogOn; applyEnv(); toast(`FOG ${fogOn?"ON":"OFF"}`); }
+      if(e.code==="KeyT" && !e.repeat){ isNight = !isNight; applyEnv(); toast(isNight?"NIGHT MODE":"DAY MODE"); }
+      if(e.code==="KeyR" && !e.repeat){ resetAll(); toast("RESET"); }
+
+      if(e.code.startsWith("Digit") && !e.repeat){
+        const n = parseInt(e.code.slice(5), 10);
+        if(n>=1 && n<=5){
+          sel.value = CAR_PROFILES[n-1].id;
+          sel.dispatchEvent(new Event('change'));
+        }
+      }
+    });
+    addEventListener('keyup', (e)=> keys.delete(e.code));
+
+    function resetAll(){
+      state.speed=0; state.dist=0; state.laneX=0; state.laneV=0;
+      initRoad();
+      consume=0;
+      for(const d of deco){
+        d.u=Math.random();
+        d.side=Math.random()<0.5?-1:1;
+        if(d.kind==="tree") d.xOff=(ROAD_WIDTH*0.9 + 6 + Math.random()*26);
+        else { d.xOff=(ROAD_WIDTH*0.9 + 28 + Math.random()*70); d.y=4*(0.9+Math.random()*1.8); }
+      }
+    }
+
+    // ===== start camera =====
+    camera.position.set(0, 6.0, 16.0);
+
+    // ===== loop =====
+    let last = performance.now();
     toast("W로 출발! 1~5로 차 바꾸기 🚗");
 
     function tick(){
@@ -698,46 +585,36 @@
       const dt = Math.min(0.033, (now-last)/1000);
       last = now;
 
-      const throttle = (keys.has("KeyW") ? 1 : 0);
-      const brakeIn  = (keys.has("KeyS") ? 1 : 0);
-      const steerIn  = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+      const throttle = keys.has("KeyW") ? 1 : 0;
+      const brakeIn  = keys.has("KeyS") ? 1 : 0;
+      const steerIn  = (keys.has("KeyD")?1:0) - (keys.has("KeyA")?1:0);
       const boost    = keys.has("ShiftLeft") || keys.has("ShiftRight");
 
-      // max speed
-      const maxV = (currentCar.topSpeed / 3.6) * (boost ? 1.08 : 1.0);
-
-      // accel
+      const maxV = (currentCar.topSpeed/3.6) * (boost ? 1.08 : 1.0);
       const r = state.speed / Math.max(0.1, maxV);
       const engine = powerCurve(currentCar.accelTier, r);
       const accelBase = 14.0 * currentCar.accelMul * (boost ? 1.20 : 1.0) * engine;
 
-      // braking + aero drag
       const brake = 18.0;
       const aeroDrag = (0.20 + state.speed*0.018) * currentCar.aero;
 
-      if(throttle){
-        state.speed += accelBase * dt;
-      }else{
-        state.speed -= aeroDrag * dt;
-      }
-      if(brakeIn){
-        state.speed -= brake * dt;
-      }
+      if(throttle) state.speed += accelBase*dt;
+      else         state.speed -= aeroDrag*dt;
+      if(brakeIn)  state.speed -= brake*dt;
 
       state.speed = clamp(state.speed, 0, maxV);
 
-      // steering (more sensitive at speed, but also more "push out" at speed)
+      // steering + curve push
       const laneMax = ROAD_WIDTH/2 - 1.05;
       const steerPower = (7.2 + state.speed*0.22) / currentCar.grip;
       state.laneV += steerIn * steerPower * dt;
       state.laneV *= Math.pow(0.10, dt);
       state.laneX += state.laneV * dt;
 
-      // curve drift: at higher speed, you get pushed outward a bit
+      // curve push
       const curvePush = curv * state.speed * state.speed * 0.55 * (1.0/currentCar.grip);
       state.laneX += curvePush * dt;
 
-      // bounds
       const over = Math.max(0, Math.abs(state.laneX) - laneMax);
       if(over>0){
         state.laneX -= Math.sign(state.laneX) * over * 2.7 * dt;
@@ -745,139 +622,59 @@
       }
       state.laneX = clamp(state.laneX, -laneMax-0.6, laneMax+0.6);
 
-      // distance
+      // distance + road
       const dz = state.speed * dt;
       state.dist += dz;
 
-      // road advance & get current render offset
-      const off = advanceRoadBy(dz);
+      const {offX, offZ} = advanceRoad(dz);
 
-      // Rebuild road mesh occasionally (not every frame) for performance
-      rebuildTimer += dt;
-      if(rebuildTimer > 0.050){ // 20fps rebuild feels smooth enough
-        rebuildTimer = 0;
+      // update ribbon every frame (N=240, typed array라 충분히 안정/빠름)
+      writeRibbon(geoShoulder, 0, offX, offZ);
+      writeRibbon(geoRoad,     0, offX, offZ);
+      writeRibbon(geoLineC,    0, offX, offZ);
+      writeRibbon(geoLineL, -ROAD_WIDTH/2 + 0.35, offX, offZ);
+      writeRibbon(geoLineR,  ROAD_WIDTH/2 - 0.35, offX, offZ);
+      placeDeco(offX, offZ);
 
-        // Make shifted versions of centers on the fly by subtracting off
-        // We'll temporarily overwrite a copy array for updateRibbon
-        // Cheap trick: subtract off into a temp array of Vector3 references.
-        // We'll do it in-place with a backup of off and then re-add? (Nope—just compute in loop.)
-        // So we create "virtual" shifted centers by writing into a static temp list.
-        const tempCenters = updateRibbon._tempCenters || (updateRibbon._tempCenters = Array.from({length:ROAD_SAMPLES}, ()=>new THREE.Vector3()));
-        for(let i=0;i<ROAD_SAMPLES;i++){
-          tempCenters[i].copy(centers[i]).sub(off);
-        }
-        // swap centers reference for this rebuild
-        const savedCenters = centers;
-        updateRibbon._saved = savedCenters;
+      // dashed scroll 느낌: v repeat 움직이기
+      dashTex.offset.y += dt * (0.35 + state.speed*0.006);
 
-        // monkey patch: read from tempCenters inside updateRibbon by temporarily swapping
-        updateRibbon._centers = tempCenters;
-
-        // wrapped updater reading from updateRibbon._centers
-        const oldCenters = centers;
-        // we can't reassign const centers; so we modify updateRibbon to read from updateRibbon._centers if present
-        // (see below: updateRibbonRead)
-        function updateRibbonRead(geo, offsetX){
-          const width = geo.userData.width;
-          const pos = geo.attributes.position.array;
-          const nor = geo.attributes.normal.array;
-          const uv  = geo.attributes.uv.array;
-          const src = updateRibbon._centers || oldCenters;
-
-          for(let i=0;i<ROAD_SAMPLES;i++){
-            const c = src[i];
-            const y = headings[i];
-            const right = new THREE.Vector3(Math.cos(y), 0, Math.sin(y));
-            const half = width * 0.5;
-
-            const leftP  = c.clone().addScaledVector(right, (-half + offsetX));
-            const rightP = c.clone().addScaledVector(right, ( half + offsetX));
-
-            const base = i*2*3;
-            pos[base+0] = leftP.x;  pos[base+1] = leftP.y;  pos[base+2] = leftP.z;
-            pos[base+3] = rightP.x; pos[base+4] = rightP.y; pos[base+5] = rightP.z;
-
-            nor[base+0] = 0; nor[base+1] = 1; nor[base+2] = 0;
-            nor[base+3] = 0; nor[base+4] = 1; nor[base+5] = 0;
-
-            const v = i / (ROAD_SAMPLES-1);
-            const buv = i*2*2;
-            uv[buv+0] = 0; uv[buv+1] = v * 22;
-            uv[buv+2] = 1; uv[buv+3] = v * 22;
-          }
-
-          geo.attributes.position.needsUpdate = true;
-          geo.attributes.normal.needsUpdate = true;
-          geo.attributes.uv.needsUpdate = true;
-          geo.computeBoundingSphere();
-        }
-
-        updateRibbonRead(shoulderGeo, 0);
-        updateRibbonRead(roadGeo, 0);
-
-        // lane offsets
-        updateRibbonRead(lineGeoCenter, 0);
-        updateRibbonRead(lineGeoL, -ROAD_WIDTH/2 + 0.35);
-        updateRibbonRead(lineGeoR,  ROAD_WIDTH/2 - 0.35);
-
-        // scenery placement
-        placeDeco();
-
-        // dash flicker
-        dashPhase += dt * (1.4 + state.speed*0.03);
-        const dash = (Math.sin(dashPhase*6.0) > 0) ? 1 : 0;
-        // fake dashed centerline by toggling opacity at distance (simple & cheap)
-        lineCenter.visible = dash === 1;
-      }
-
-      // car placement near origin: use center at index ~6 as "ahead"
+      // car placement near sample index
       const carIdx = 6;
-      const c = centers[carIdx].clone().sub(off);
-      const y = headings[carIdx];
-      const right = new THREE.Vector3(Math.cos(y), 0, Math.sin(y));
-      const fwd = new THREE.Vector3(Math.sin(y), 0, -Math.cos(y));
+      const y = yawArr[carIdx];
+      const rx = Math.cos(y), rz = Math.sin(y);
+      const fx = Math.sin(y), fz = -Math.cos(y);
 
-      const carPos = c.clone()
-        .addScaledVector(right, state.laneX)
-        .addScaledVector(fwd, 10.0);
+      const baseX = cx[carIdx]-offX;
+      const baseZ = cz[carIdx]-offZ;
 
-      car.position.set(carPos.x, 0, carPos.z);
-      car.rotation.y = y + (-steerIn * 0.10);
+      const carX = baseX + rx*state.laneX + fx*10.0;
+      const carZ = baseZ + rz*state.laneX + fz*10.0;
 
-      // wheel spin
-      const wheels = car.userData.wheels || [];
+      car.position.set(carX, 0, carZ);
+      car.rotation.y = y + (-steerIn*0.10);
+
+      // wheels spin
       const spin = state.speed * dt * 2.6;
-      for(const w of wheels) w.rotation.x -= spin;
+      for(const w of car.userData.wheels) w.rotation.x -= spin;
 
-      // lights (night)
+      // lights
       const headI = isNight ? 2.2 : 0.0;
       car.userData.headL.intensity = headI;
       car.userData.headR.intensity = headI;
       car.userData.under.intensity = isNight ? 0.65 : 0.0;
 
-      // camera follow + speed-based lowering + shake
-      const kmh = state.speed * 3.6;
-      const speed01 = clamp((kmh - 30) / 260, 0, 1);
+      // camera
+      const kmh = state.speed*3.6;
+      const speed01 = clamp((kmh-30)/260, 0, 1);
+      const camLow = lerp(6.0, 4.6, speed01);
+      const camBack= lerp(16.0, 13.2, speed01);
+      const camLook= lerp(30.0, 40.0, speed01);
 
-      const camLow = lerp(6.0, 4.6, speed01);          // lower at speed
-      const camBack = lerp(16.0, 13.2, speed01);       // slightly closer
-      const camLookAhead = lerp(30.0, 40.0, speed01);  // look further
-
-      const sh = cameraShake(state.speed, dt);
-
-      const camTarget = new THREE.Vector3(
-        car.position.x + sh.x,
-        camLow + sh.y,
-        car.position.z + camBack + sh.z
-      );
+      const sh = getShake(state.speed, dt);
+      const camTarget = new THREE.Vector3(carX + sh.x, camLow + sh.y, carZ + camBack + sh.z);
       camera.position.lerp(camTarget, 1 - Math.pow(0.001, dt));
-
-      const lookAt = new THREE.Vector3(
-        car.position.x*0.65,
-        1.25,
-        car.position.z - camLookAhead
-      );
-      camera.lookAt(lookAt);
+      camera.lookAt(carX*0.65, 1.25, carZ - camLook);
 
       // HUD
       document.getElementById('spd').textContent = `${Math.round(kmh)} km/h`;
@@ -886,39 +683,15 @@
       renderer.render(scene, camera);
       requestAnimationFrame(tick);
     }
-
-    // ===== UI toggles =====
-    addEventListener('keydown', (e)=>{
-      if(e.code === "KeyF"){ /* handled above */ }
-      if(e.code === "KeyT"){ /* handled above */ }
-    });
+    tick();
 
     // ===== resize =====
     addEventListener('resize', ()=>{
-      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setSize(innerWidth, innerHeight, false);
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
     });
-
-    // ===== start =====
-    // initial meshes build
-    updateRibbon(shoulderGeo, 0);
-    updateRibbon(roadGeo, 0);
-    updateRibbon(lineGeoCenter, 0);
-    updateRibbon(lineGeoL, -ROAD_WIDTH/2 + 0.35);
-    updateRibbon(lineGeoR,  ROAD_WIDTH/2 - 0.35);
-    placeDeco();
-
-    tick();
-
-    // ===== extra key handlers (env + reset) =====
-    addEventListener('keydown', (e)=>{
-      if(e.repeat) return;
-      if(e.code === "KeyF"){ fogOn = !fogOn; applyEnv(); toast(`FOG ${fogOn ? "ON" : "OFF"}`); }
-      if(e.code === "KeyT"){ isNight = !isNight; applyEnv(); toast(isNight ? "NIGHT MODE" : "DAY MODE"); }
-      if(e.code === "KeyR"){ resetAll(); toast("RESET"); }
-    });
-
   </script>
 </body>
 </html>
