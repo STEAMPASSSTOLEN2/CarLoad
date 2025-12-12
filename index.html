@@ -227,8 +227,100 @@
 
     const tiles = [];
 
+    // ---- Ramps / Jumps (랜덤 점프대) ----
+    // ramp types: 'flat' (평평 점프), 'barrel' (배럴롤)
+    // tile.userData.ramps: [{type, x, zLocal, width, len, mesh, triggered}]
+    const rampMatFlat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.65, metalness: 0.15 });
+    const rampMatBar  = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.55, metalness: 0.18 });
+
+    function rand(min, max){ return min + Math.random() * (max - min); }
+    function chance(p){ return Math.random() < p; }
+
+    function clearRamps(tile){
+      tile.userData ??= {};
+      const ms = tile.userData.rampMeshes || [];
+      for(const m of ms){ tile.remove(m); }
+      tile.userData.ramps = [];
+      tile.userData.rampMeshes = [];
+    }
+
+    function addRampMesh(tile, type, x, zLocal){
+      const width = 2.6;
+      const len = type === 'barrel' ? 6.5 : 5.2;
+      const height = type === 'barrel' ? 1.55 : 1.05;
+
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, len),
+        type === 'barrel' ? rampMatBar : rampMatFlat
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      // 도로 위로 살짝 띄우고, 전방(-Z)으로 경사
+      mesh.position.set(x, 0.35 + height/2, zLocal);
+      mesh.rotation.x = (type === 'barrel') ? 0.30 : 0.24;
+
+      if(type === 'barrel'){
+        // 시각적으로 배럴롤임을 알려주는 링
+        const ringMat = new THREE.MeshStandardMaterial({ color: 0xa7f3d0, roughness: 0.45, metalness: 0.25, emissive: 0x064e3b, emissiveIntensity: 0.25 });
+        const ringGeo = new THREE.TorusGeometry(width*0.62, 0.10, 10, 28);
+        const ring1 = new THREE.Mesh(ringGeo, ringMat);
+        const ring2 = new THREE.Mesh(ringGeo, ringMat);
+        ring1.rotation.x = Math.PI/2;
+        ring2.rotation.x = Math.PI/2;
+        ring1.position.set(0, height*0.35, -len*0.15);
+        ring2.position.set(0, height*0.35, -len*0.65);
+        mesh.add(ring1);
+        mesh.add(ring2);
+      }
+
+      tile.add(mesh);
+      tile.userData.rampMeshes.push(mesh);
+      tile.userData.ramps.push({ type, x, zLocal, width, len, mesh, triggered:false });
+    }
+
+    function populateRamps(tile){
+      clearRamps(tile);
+
+      // 타일당 0~2개. 배럴롤은 희귀.
+      const count = chance(0.65) ? (chance(0.35) ? 2 : 1) : 0;
+      if(count === 0) return;
+
+      const zMin = -ROAD_LEN*0.40;
+      const zMax =  ROAD_LEN*0.40;
+
+      const half = ROAD_WIDTH/2;
+      const margin = 2.6;
+      const xMin = -half + margin;
+      const xMax =  half - margin;
+
+      const used = [];
+      for(let i=0;i<count;i++){
+        const type = chance(0.25) ? 'barrel' : 'flat';
+        let x = rand(xMin, xMax);
+        let zLocal = rand(zMin, zMax);
+
+        // 서로 너무 가까우면 재시도
+        let tries = 0;
+        while(tries++ < 8){
+          let ok = true;
+          for(const u of used){
+            const dx = x - u.x;
+            const dz = zLocal - u.z;
+            if((dx*dx + dz*dz) < 120){ ok = false; break; }
+          }
+          if(ok) break;
+          x = rand(xMin, xMax);
+          zLocal = rand(zMin, zMax);
+        }
+        used.push({x, z:zLocal});
+        addRampMesh(tile, type, x, zLocal);
+      }
+    }
+
     function makeTile(z){
       const g = new THREE.Group();
+      g.userData = { ramps: [], rampMeshes: [] };
 
       const road = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH, 0.35, ROAD_LEN), roadMat);
       road.position.y = 0.175;
@@ -264,6 +356,8 @@
       g.add(rightRail);
 
       g.position.z = z;
+      // 타일 생성 시 랜덤 점프대 배치
+      populateRamps(g);
       return g;
     }
 
@@ -354,6 +448,12 @@
       // car params
       presetIndex: 2,
       params: null,
+      // air/jump
+      y: 0,
+      vY: 0,
+      airborne: false,
+      roll: 0,
+      rollRate: 0,
     };
 
     function applyPreset(i){
@@ -380,6 +480,17 @@
       state.yaw = 0;
       state.vForward = 0;
       state.vSide = 0;
+      state.y = 0;
+      state.vY = 0;
+      state.airborne = false;
+      state.roll = 0;
+      state.rollRate = 0;
+      // 램프 트리거 리셋
+      for(const t of tiles){
+        if(t.userData?.ramps){
+          for(const r of t.userData.ramps) r.triggered = false;
+        }
+      }
       // keep road centered
       roadGroup.position.set(0,0,0);
       showToast('리셋 완료');
@@ -480,6 +591,11 @@
 
     function step(dt){
       updateInput();
+
+      // ---------- Jump / Air ----------
+      const gravity = 18.0;
+      const airDrag = 0.25;
+      const rollDamp = 1.8;
 
       const p = state.params;
       const grip = Number(gripEl.value);               // 0.6~0.98 (higher = less drift)
@@ -595,17 +711,80 @@
           let minZ = Infinity;
           for(const u of tiles) minZ = Math.min(minZ, u.position.z);
           t.position.z = minZ - ROAD_LEN;
+          populateRamps(t);
         }
         if(worldZ < carZ - ROAD_LEN*(TILE_COUNT-2)){
           let maxZ = -Infinity;
           for(const u of tiles) maxZ = Math.max(maxZ, u.position.z);
           t.position.z = maxZ + ROAD_LEN;
+          populateRamps(t);
         }
       }
 
+      // --- Ramp triggers (점프/배럴롤) ---
+      const carX = state.pos.x;
+      const carZNow = state.pos.z;
+      for(const t of tiles){
+        const ramps = t.userData?.ramps;
+        if(!ramps || ramps.length===0) continue;
+        for(const r of ramps){
+          if(r.triggered) continue;
+
+          const rx = r.x;
+          const rz = t.position.z + r.zLocal;
+
+          // 램프 시작선(차가 먼저 밟는 쪽)
+          const startZ = rz + (r.len * 0.35);
+          const inX = Math.abs(carX - rx) < (r.width * 0.55);
+          const crossed = (carZNow < startZ); // 전방(-Z)로 가며 startZ를 지나면 true
+          const near = Math.abs(carZNow - rz) < (r.len * 1.2);
+
+          if(!state.airborne && inX && crossed && near){
+            r.triggered = true;
+            const spd = Math.abs(state.vForward);
+
+            // 속도에 비례해서 점프 세기 증가
+            const base = (r.type === 'barrel') ? 9.0 : 7.2;
+            const boost = clamp(spd / 28.0, 0, 1) * ((r.type === 'barrel') ? 7.0 : 5.5);
+            state.vY = base + boost;
+            state.airborne = true;
+
+            if(r.type === 'barrel'){
+              const dir = (carX - rx) >= 0 ? 1 : -1;
+              state.rollRate = (6.0 + 4.0*clamp(spd/35.0,0,1)) * dir; // rad/s
+              showToast('배럴롤!');
+            }else{
+              showToast('점프!');
+            }
+          }
+        }
+      }
+
+      // --- Air / vertical integration ---
+      if(state.airborne){
+        state.vY -= gravity * dt;
+        state.vY *= Math.exp(-airDrag * dt);
+        state.y += state.vY * dt;
+
+        state.roll += state.rollRate * dt;
+        state.rollRate *= Math.exp(-rollDamp * dt);
+
+        // 착지
+        if(state.y <= 0){
+          state.y = 0;
+          state.vY = 0;
+          state.airborne = false;
+          state.roll *= 0.35;
+          state.rollRate = 0;
+        }
+      }else{
+        // 지면에 붙어있으면 롤 원위치
+        state.roll *= Math.exp(-6.0*dt);
+      }
+
       // --- Update visuals ---
-      car.position.set(state.pos.x, 0, state.pos.z);
-      car.rotation.y = state.yaw;
+      car.position.set(state.pos.x, state.y, state.pos.z);
+      car.rotation.set(0, state.yaw, state.roll);
 
       // wheel spin
       const wheelSpin = state.vForward * dt * 2.4;
