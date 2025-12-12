@@ -3,847 +3,638 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CarLoad Rebuild v3.0 (Fresh Core)</title>
+  <title>Endless Road Drive — Physics First</title>
   <style>
-    html, body { margin:0; padding:0; overflow:hidden; background:#0b1020; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    canvas{ display:block; }
-
-    #panel{
-      position:fixed; left:12px; top:12px; z-index:10; width: 390px;
-      background: rgba(10,12,18,0.62); color:#e9eefc;
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:16px; padding:12px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.40);
+    :root{
+      --bg1:#0b1026;
+      --bg2:#1a2a4d;
+      --panel: rgba(0,0,0,.55);
+      --text: #eaf0ff;
+      --muted: rgba(234,240,255,.75);
+      --accent: #7dd3fc;
+      --danger: #ff6b6b;
+      --ok: #34d399;
     }
-    #panel h1{ margin:0 0 8px; font-size:14px; font-weight:900; }
-    .row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:6px 0; }
-    select, button, label{
-      background: rgba(255,255,255,0.08); color:#e9eefc;
-      border:1px solid rgba(255,255,255,0.14);
-      border-radius: 12px; padding:8px 10px; font-size:13px;
+    html,body{height:100%;margin:0;overflow:hidden;font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Apple SD Gothic Neo, Noto Sans KR, sans-serif;}
+    body{
+      background: radial-gradient(1200px 900px at 50% 20%, var(--bg2), var(--bg1));
+      color:var(--text);
+    }
+    #hud{
+      position:fixed;left:14px;top:14px;z-index:10;
+      background:var(--panel);
+      border:1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(10px);
+      border-radius:14px;
+      padding:12px 12px 10px;
+      width:min(390px, calc(100vw - 28px));
+      box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    }
+    #hud h1{margin:0 0 8px;font-size:14px;font-weight:700;letter-spacing:.2px;}
+    #grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .row{display:flex;gap:8px;align-items:center;}
+    label{font-size:12px;color:var(--muted);}
+    select,input[type="range"],button{
+      width:100%;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.14);
+      border-radius: 10px;
+      padding: 8px 10px;
       outline:none;
     }
-    button{ cursor:pointer; }
-    button:hover{ background: rgba(255,255,255,0.12); }
-    label{ user-select:none; display:flex; align-items:center; gap:8px; }
-    input[type="range"]{ width: 140px; }
-    input[type="checkbox"]{ transform: translateY(1px); }
-    .muted{ font-size:12px; color: rgba(233,238,252,0.78); line-height:1.4; }
-
-    #hud{
-      position:fixed; right:12px; top:12px; z-index:10; min-width: 240px;
-      background: rgba(10,12,18,0.52); color:#e9eefc;
-      border:1px solid rgba(255,255,255,0.12);
-      border-radius:16px; padding:10px 12px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 30px rgba(0,0,0,0.40);
-      font-size:12px; line-height:1.45; text-align:right;
+    input[type="range"]{padding:8px 6px;}
+    button{cursor:pointer;transition:.15s transform,.15s background,.15s border-color;}
+    button:hover{transform: translateY(-1px); background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.2);}    
+    .pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);}
+    .dot{width:8px;height:8px;border-radius:999px;background:rgba(255,255,255,.25);}
+    .dot.ok{background:var(--ok);} .dot.bad{background:var(--danger);} .dot.on{background:var(--accent);}    
+    #stats{margin-top:10px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+    .stat{
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 12px;
+      padding: 8px 10px;
     }
+    .stat .k{font-size:11px;color:var(--muted);} 
+    .stat .v{font-size:14px;font-weight:700;margin-top:2px;}
+    #help{margin-top:10px;font-size:11px;color:var(--muted);line-height:1.35;}
     #toast{
-      position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
-      z-index:10; padding:8px 14px; border-radius:999px;
-      background: rgba(10,12,18,0.38); color: rgba(233,238,252,0.86);
-      border:1px solid rgba(255,255,255,0.10);
+      position:fixed;left:50%;bottom:18px;transform:translateX(-50%);
+      background: rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.14);
+      padding: 10px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--text);
+      z-index: 20;
+      opacity: 0;
+      transition: opacity .2s;
+      pointer-events:none;
       backdrop-filter: blur(10px);
-      font-size:12px; user-select:none;
     }
+    #toast.show{opacity:1;}
+    canvas{display:block;}
   </style>
 </head>
 <body>
-  <div id="panel">
-    <h1>CarLoad v3.0 — Road+Rails Infinite + Physics Core</h1>
-    <div class="row">
-      <select id="carSelect"></select>
-      <button id="resetBtn">리셋(R)</button>
-      <button id="pauseBtn">일시정지</button>
-      <label title="체감이 반대면 켜">
-        <input id="invertSteer" type="checkbox" /> 조향 반전
-      </label>
-    </div>
-
-    <div class="row">
-      <label title="도로 폭">
-        도로 폭
-        <input id="roadWidth" type="range" min="10" max="30" step="1" value="16" />
-        <span id="roadWidthVal" class="muted">16</span>
-      </label>
-      <label title="가드레일 높이">
-        레일 높이
-        <input id="railHeight" type="range" min="1" max="4" step="0.1" value="1.6" />
-        <span id="railHeightVal" class="muted">1.6</span>
-      </label>
-    </div>
-
-    <div class="muted">
-      조작: <b>W</b>가속 / <b>S</b>브레이크 / <b>A,D</b>조향 / <b>Space</b>핸드브레이크 / <b>R</b>리셋<br>
-      토글: <b>P</b>낮·밤 / <b>M</b>안개 / <b>L</b>라이트
-    </div>
-    <div id="stats" class="muted" style="margin-top:8px;"></div>
-  </div>
-
   <div id="hud">
-    <div><b id="hudCar">-</b></div>
-    <div>속도: <b id="hudSpeed">0</b> km/h</div>
-    <div>스티어: <b id="hudSteer">0</b>°</div>
-    <div>슬립각: <b id="hudSlip">0</b>°</div>
-    <div>YawRate: <b id="hudYaw">0</b>°/s</div>
-    <div>상태: <b id="hudSafe">OK</b></div>
-    <div>라이트: <b id="hudLight">OFF</b></div>
-    <div>시간: <b id="hudTime">DAY</b></div>
-    <div>안개: <b id="hudFog">ON</b></div>
+    <h1>Endless Road Drive — 물리부터 제대로</h1>
+    <div id="grid">
+      <div>
+        <label>차량 선택</label>
+        <div class="row">
+          <select id="carSelect"></select>
+        </div>
+      </div>
+      <div>
+        <label>도로 폭</label>
+        <div class="row">
+          <input id="roadWidth" type="range" min="10" max="40" step="1" value="22" />
+        </div>
+      </div>
+      <div>
+        <label>주행 보정 (드리프트 억제)</label>
+        <div class="row">
+          <input id="grip" type="range" min="0.6" max="0.98" step="0.01" value="0.88" />
+        </div>
+      </div>
+      <div>
+        <label>조향 민감도</label>
+        <div class="row">
+          <input id="steerSens" type="range" min="0.6" max="2.0" step="0.05" value="1.15" />
+        </div>
+      </div>
+      <div style="grid-column: 1 / -1; display:flex; gap:8px;">
+        <button id="resetBtn">리셋</button>
+        <button id="pauseBtn">일시정지</button>
+      </div>
+      <div style="grid-column: 1 / -1; display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <span class="pill"><span id="pillHead" class="dot"></span>헤드라이트(L)</span>
+        <span class="pill"><span id="pillDay" class="dot on"></span>낮/밤(P)</span>
+        <span class="pill"><span id="pillFog" class="dot"></span>안개(M)</span>
+      </div>
+    </div>
+    <div id="stats">
+      <div class="stat"><div class="k">속도</div><div id="spd" class="v">0 km/h</div></div>
+      <div class="stat"><div class="k">조향각</div><div id="yaw" class="v">0°</div></div>
+      <div class="stat"><div class="k">상태</div><div id="state" class="v">RUN</div></div>
+    </div>
+    <div id="help">
+      <b>조작</b>: W 가속 / S 브레이크·후진 / A·D 조향 / Space 핸드브레이크 / R 리셋<br>
+      <b>토글</b>: L 헤드라이트 / P 낮·밤 / M 안개 / Esc 일시정지<br>
+      <span style="opacity:.9">(핵심: 이동 방향이 차 각도를 따라가도록 속도 벡터를 계속 회전시키는 방식)</span>
+    </div>
   </div>
-
-  <div id="toast">v3.0: "진짜 충돌" 레일 + 자전거 모델 기반 아케이드 물리(슬립/그립/감쇠)</div>
-
-<script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-
-// =========================
-// 0) 안전/수학 유틸
-// =========================
-function isBad(n){ return !Number.isFinite(n) || Number.isNaN(n); }
-function safe(n, fallback=0){ return isBad(n) ? fallback : n; }
-function clamp(x,a,b){ x = safe(x,a); return Math.max(a, Math.min(b, x)); }
-function lerp(a,b,t){ return a + (b-a)*clamp(t,0,1); }
-function rad(deg){ return deg * Math.PI / 180; }
-function deg(rad){ return rad * 180 / Math.PI; }
-function expSmooth(current, target, lambda, dt){
-  dt = clamp(dt, 0, 0.05);
-  const t = 1 - Math.exp(-lambda * dt);
-  return lerp(current, target, t);
-}
-
-// =========================
-// 1) 렌더/씬
-// =========================
-const canvas = document.createElement('canvas');
-document.body.appendChild(canvas);
-
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-renderer.setSize(innerWidth, innerHeight, true);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.25;
-
-const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 2400);
-camera.position.set(0, 7.2, 14);
-
-// ===== Sky =====
-const sky = (()=>{
-  const geo = new THREE.SphereGeometry(1200, 32, 16);
-  const mat = new THREE.ShaderMaterial({
-    side: THREE.BackSide,
-    uniforms: {
-      topColor:{ value:new THREE.Color(0x8fd3ff) },
-      midColor:{ value:new THREE.Color(0x4d8bff) },
-      botColor:{ value:new THREE.Color(0xd9f2ff) },
-      offset:{ value:0.08 },
-      exponent:{ value:0.8 }
-    },
-    vertexShader:`varying vec3 vWorldPos; void main(){ vec4 wpos=modelMatrix*vec4(position,1.0); vWorldPos=wpos.xyz; gl_Position=projectionMatrix*viewMatrix*wpos; }`,
-    fragmentShader:`varying vec3 vWorldPos; uniform vec3 topColor, midColor, botColor; uniform float offset, exponent; void main(){ float h=normalize(vWorldPos).y; float t=pow(max(h+offset,0.0),exponent); vec3 col=mix(botColor, midColor, smoothstep(0.0,0.45,t)); col=mix(col, topColor, smoothstep(0.35,1.0,t)); gl_FragColor=vec4(col,1.0);} `
-  });
-  const m = new THREE.Mesh(geo, mat);
-  m.frustumCulled = false;
-  scene.add(m);
-  return m;
-})();
-
-// ===== Ground =====
-const groundMat = new THREE.MeshStandardMaterial({ color:0xd7e7ff, roughness:1.0, metalness:0.0 });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(3400, 3400, 1, 1), groundMat);
-ground.rotation.x = -Math.PI/2;
-ground.position.y = -0.02;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// ===== Lights =====
-scene.add(new THREE.AmbientLight(0x9fb0ff, 0.45));
-scene.add(new THREE.HemisphereLight(0xbfe3ff, 0x101526, 0.55));
-
-const sunMoon = new THREE.DirectionalLight(0xcfe0ff, 0.35);
-sunMoon.position.set(120, 180, 40);
-sunMoon.castShadow = true;
-sunMoon.shadow.mapSize.set(2048, 2048);
-sunMoon.shadow.camera.near = 10;
-sunMoon.shadow.camera.far  = 620;
-sunMoon.shadow.camera.left = -190;
-sunMoon.shadow.camera.right= 190;
-sunMoon.shadow.camera.top  = 190;
-sunMoon.shadow.camera.bottom=-190;
-scene.add(sunMoon);
-
-const fill = new THREE.DirectionalLight(0x6ea2ff, 0.35);
-fill.position.set(-80, 90, -120);
-scene.add(fill);
-
-// ===== Fog (toggle) =====
-let fogOn = true;
-function setFog(isNight){
-  if (!fogOn){ scene.fog = null; return; }
-  scene.fog = new THREE.FogExp2(0x0a0f1e, isNight ? 0.0072 : 0.0030);
-}
-
-// =========================
-// 2) 도로/가드레일/무한반복
-//    - "플레이어는 0 근처" / "월드를 뒤로"
-//    - 커브는 1D 노이즈로 연속
-// =========================
-const ROAD = {
-  width: 16,
-  y: 0,
-  step: 2.0,
-  chunkLength: 70,
-  chunks: 18,
-  curvatureLimit: 0.010,
-  bankMax: 0.24,
-};
-ROAD.rows = Math.floor(ROAD.chunkLength / ROAD.step) + 1;
-
-const RAIL = {
-  thickness: 0.26,
-  height: 1.6,
-  lift: 0.02,
-  // 충돌 감쇠(튕김 대신 딱 막히는 느낌)
-  speedDamp: 0.988,
-};
-
-let roadSeed = 1337;
-function hash01(n){ const x = Math.sin(n * 127.1 + roadSeed * 0.013) * 43758.5453; return x - Math.floor(x); }
-function noise1D(t){ const i=Math.floor(t), f=t-i; const a=hash01(i), b=hash01(i+1); const u=f*f*(3-2*f); return a+(b-a)*u; }
-
-const track = { heading:0, x:0, z:0, s:0 };
-function resetTrack(){ track.heading=0; track.x=0; track.z=0; track.s=0; }
-function advanceTrack(ds){
-  const sNext = track.s + ds;
-  const t = sNext * 0.032;
-  const n  = (noise1D(t) - 0.5) * 2.0;
-  const n2 = (noise1D(t*0.41 + 30.0) - 0.5) * 2.0;
-  let curvature = (n*0.64 + n2*0.36) * ROAD.curvatureLimit;
-  curvature = clamp(curvature, -ROAD.curvatureLimit, ROAD.curvatureLimit);
-
-  track.heading += curvature * ds;
-  track.heading = safe(track.heading, 0);
-
-  track.x += Math.sin(track.heading) * ds;
-  track.z += Math.cos(track.heading) * ds;
-  track.x = safe(track.x, 0);
-  track.z = safe(track.z, 0);
-  track.s = sNext;
-
-  const bank = clamp(curvature * 240.0, -ROAD.bankMax, ROAD.bankMax);
-  return { pos:new THREE.Vector3(track.x, ROAD.y, track.z), heading:track.heading, bank, s:track.s };
-}
-
-function makeRoadChunk(){
-  const verts = ROAD.rows * 2;
-  const positions = new Float32Array(verts * 3);
-  const normals   = new Float32Array(verts * 3);
-  const uvs       = new Float32Array(verts * 2);
-  const indices = [];
-  for (let i=0; i<ROAD.rows-1; i++){
-    const a=i*2, b=i*2+1, c=(i+1)*2, d=(i+1)*2+1;
-    indices.push(a,b,c, b,d,c);
-  }
-
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(positions,3));
-  geom.setAttribute('normal',   new THREE.BufferAttribute(normals,3));
-  geom.setAttribute('uv',       new THREE.BufferAttribute(uvs,2));
-  geom.setIndex(indices);
-
-  const roadMat = new THREE.MeshStandardMaterial({ color:0x324563, roughness:0.92, metalness:0.03 });
-  const mesh = new THREE.Mesh(geom, roadMat);
-  mesh.receiveShadow = true;
-
-  const lineGeom = new THREE.BufferGeometry();
-  const linePos = new Float32Array(ROAD.rows * 3);
-  lineGeom.setAttribute('position', new THREE.BufferAttribute(linePos, 3));
-  const lineMat = new THREE.LineDashedMaterial({ color:0x0b1020, dashSize:2.5, gapSize:2.5, transparent:true, opacity:0.55 });
-  const centerLine = new THREE.Line(lineGeom, lineMat);
-
-  // 레일(시각용) — 충돌은 수학적으로 처리하므로, 시각은 단순 박스로 충분
-  const railMat = new THREE.MeshStandardMaterial({
-    color:0x0f1627, roughness:0.55, metalness:0.35,
-    emissive:0x172445, emissiveIntensity:0.55
-  });
-  const railGeo = new THREE.BoxGeometry(RAIL.thickness, RAIL.height, ROAD.chunkLength);
-  const leftRail  = new THREE.Mesh(railGeo, railMat);
-  const rightRail = new THREE.Mesh(railGeo, railMat);
-  leftRail.castShadow = rightRail.castShadow = true;
-  leftRail.receiveShadow = rightRail.receiveShadow = true;
-
-  const g = new THREE.Group();
-  g.add(mesh);
-  g.add(centerLine);
-  g.add(leftRail);
-  g.add(rightRail);
-  g.userData = { mesh, centerLine, leftRail, rightRail };
-  return g;
-}
-
-function updateChunk(chunk, samples){
-  const { mesh, centerLine, leftRail, rightRail } = chunk.userData;
-  const pos = mesh.geometry.getAttribute('position');
-  const nor = mesh.geometry.getAttribute('normal');
-  const uv  = mesh.geometry.getAttribute('uv');
-  const lp  = centerLine.geometry.getAttribute('position');
-
-  for (let i=0; i<samples.length; i++){
-    const s = samples[i];
-    const p = s.pos;
-    const yaw = s.heading;
-    const bank = s.bank;
-
-    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
-    const side = new THREE.Vector3(-forward.z, 0, forward.x);
-    const up = new THREE.Vector3(0,1,0);
-
-    const q = new THREE.Quaternion().setFromAxisAngle(forward, bank);
-    const sideB = side.clone().applyQuaternion(q);
-    const upB = up.clone().applyQuaternion(q);
-
-    const halfW = ROAD.width * 0.5;
-    const L = p.clone().addScaledVector(sideB, +halfW);
-    const R = p.clone().addScaledVector(sideB, -halfW);
-
-    const vi = i*2;
-    pos.setXYZ(vi,   L.x, L.y, L.z);
-    pos.setXYZ(vi+1, R.x, R.y, R.z);
-
-    nor.setXYZ(vi,   upB.x, upB.y, upB.z);
-    nor.setXYZ(vi+1, upB.x, upB.y, upB.z);
-
-    const v = (i/(samples.length-1)) * 90.0;
-    uv.setXY(vi,   0, v);
-    uv.setXY(vi+1, 1, v);
-
-    lp.setXYZ(i, p.x, p.y+0.01, p.z);
-  }
-
-  pos.needsUpdate = true;
-  nor.needsUpdate = true;
-  uv.needsUpdate  = true;
-  mesh.geometry.computeBoundingSphere();
-
-  lp.needsUpdate = true;
-  centerLine.computeLineDistances();
-
-  // 레일 배치: 청크의 시작/끝 샘플 기준(단순)
-  const a = samples[0];
-  const b = samples[samples.length-1];
-  const mid = a.pos.clone().add(b.pos).multiplyScalar(0.5);
-  leftRail.position.set(0, RAIL.height*0.5 + RAIL.lift, 0);
-  rightRail.position.set(0, RAIL.height*0.5 + RAIL.lift, 0);
-  // 청크 그룹은 곧바로 월드 좌표로 고정해두는 대신, roadGroup 전체를 움직이므로
-  // 여기서는 단순히 "청크 로컬"에서 좌우 오프셋만 적용.
-  const x = ROAD.width * 0.5 + RAIL.thickness*0.5;
-  leftRail.position.x = -x;
-  rightRail.position.x = +x;
-  // z는 청크 자체가 geometry로 이미 만들어진 길이라 0 중심에 둠
-}
-
-const roadGroup = new THREE.Group();
-scene.add(roadGroup);
-
-let roadChunks = [];
-let samplesByChunk = [];
-
-function buildRoad(){
-  roadGroup.clear();
-  roadChunks = [];
-  samplesByChunk = [];
-  resetTrack();
-
-  let prev = { pos:new THREE.Vector3(0,ROAD.y,0), heading:0, bank:0, s:0 };
-  track.x = 0; track.z = 0; track.heading = 0; track.s = 0;
-
-  for (let c=0; c<ROAD.chunks; c++){
-    const chunk = makeRoadChunk();
-    const samples = [prev];
-    for (let i=1; i<ROAD.rows; i++){
-      const next = advanceTrack(ROAD.step);
-      samples.push(next);
-      prev = next;
-    }
-    updateChunk(chunk, samples);
-    roadGroup.add(chunk);
-    roadChunks.push(chunk);
-    samplesByChunk.push(samples);
-  }
-}
-
-let worldProgress = 0;
-let lastRecycleAt = 0;
-
-function recycleRoad(){
-  const distSince = worldProgress - lastRecycleAt;
-  if (distSince < ROAD.chunkLength) return;
-  const jumps = Math.floor(distSince / ROAD.chunkLength);
-  if (jumps <= 0) return;
-
-  for (let j=0; j<jumps; j++){
-    const chunk = roadChunks.shift();
-    const oldSamples = samplesByChunk.shift();
-
-    // 마지막 청크 끝에서 이어서 새 샘플 생성
-    const prev = samplesByChunk[samplesByChunk.length-1][ROAD.rows-1];
-    const samples = [prev];
-    for (let i=1; i<ROAD.rows; i++) samples.push(advanceTrack(ROAD.step));
-
-    updateChunk(chunk, samples);
-
-    // 맨 뒤로 붙이기
-    roadChunks.push(chunk);
-    samplesByChunk.push(samples);
-  }
-
-  lastRecycleAt += jumps * ROAD.chunkLength;
-}
-
-buildRoad();
-
-// =========================
-// 3) 차량(간단 모델) + 라이트
-// =========================
-function makeCar(color){
-  const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.65,4.2), new THREE.MeshStandardMaterial({ color, roughness:0.35, metalness:0.18 }));
-  body.position.set(0,0.75,0);
-  body.castShadow = true; body.receiveShadow = true;
-
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.55,0.45,1.6), new THREE.MeshStandardMaterial({
-    color:0x9fb8ff, roughness:0.12, metalness:0.05, transparent:true, opacity:0.33
-  }));
-  glass.position.set(0,1.03,-0.35);
-  glass.castShadow = true; glass.receiveShadow = true;
-
-  const wheelMat = new THREE.MeshStandardMaterial({ color:0x22283a, roughness:0.7, metalness:0.25 });
-  const wheelGeo = new THREE.CylinderGeometry(0.42,0.42,0.28, 14);
-  function wheel(x,z){
-    const w = new THREE.Mesh(wheelGeo, wheelMat);
-    w.rotation.z = Math.PI/2;
-    w.position.set(x,0.42,z);
-    w.castShadow = true; w.receiveShadow = true;
-    g.add(w);
-    return w;
-  }
-  const wheels = [wheel(-0.98,1.55), wheel(0.98,1.55), wheel(-0.98,-1.55), wheel(0.98,-1.55)];
-
-  const headMat = new THREE.MeshStandardMaterial({
-    color:0xdde6ff, roughness:0.22, metalness:0.0,
-    emissive:0x2a395a, emissiveIntensity:0.45
-  });
-  const hL = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.20,0.10), headMat);
-  hL.position.set(-0.75,0.72,2.15);
-  const hR = hL.clone(); hR.position.x = 0.75;
-
-  const spot = new THREE.SpotLight(0xddeaff, 0, 38, Math.PI/5, 0.35, 1.8);
-  spot.position.set(0,0.85,2.55);
-  spot.target.position.set(0,0.45,10);
-  spot.castShadow = true;
-
-  const beamMat = new THREE.MeshBasicMaterial({
-    color:0xbfd8ff, transparent:true, opacity:0.0,
-    blending: THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide
-  });
-  const beam = new THREE.Mesh(new THREE.ConeGeometry(2.8, 20, 28, 1, true), beamMat);
-  beam.rotation.x = Math.PI/2;
-  beam.position.set(0,0.75,3.20);
-  beam.renderOrder = 10;
-
-  g.add(body, glass, hL, hR);
-  g.add(spot, spot.target);
-  g.add(beam);
-
-  g.userData = { wheels, headLight: spot, headMeshes:[hL,hR], headBeam: beam };
-  return g;
-}
-
-const CAR_PRESETS = [
-  { name:"Hyundai IONIQ 5 N", color:0x8ad3ff, vmax:150, accel:7.5,  brake:11.5, steerMax:28, mu:1.05 },
-  { name:"Mazda Furai",       color:0xff5a7a, vmax:250, accel:10.2, brake:13.0, steerMax:30, mu:1.12 },
-  { name:"Huracán EVO Spyder",color:0x9cff68, vmax:330, accel:12.7, brake:14.0, steerMax:26, mu:1.10 },
-  { name:"Agera RS",          color:0xffd36e, vmax:400, accel:14.2, brake:14.8, steerMax:24, mu:1.06 },
-  { name:"Devel Sixteen",     color:0xcaa7ff, vmax:552, accel:18.0, brake:15.2, steerMax:22, mu:1.02 },
-];
-
-function mps(kmh){ return kmh/3.6; }
-function kmh(mps){ return mps*3.6; }
-
-let carIndex = 0;
-const carRoot = new THREE.Group();
-scene.add(carRoot);
-let car = null;
-
-// =========================
-// 4) 물리(핵심)
-//    - 자전거 모델 + 속도 기반 타이어 한계(간단)
-//    - '질질' 방지: v(전방)·u(측방) 분리 + 강한 감쇠 + 한계에서 클램프
-// =========================
-const state = {
-  x: 0,          // lateral offset (player space)
-  z: 0,          // forward distance (unused because world moves)
-  yaw: 0,
-  v: 0,          // forward speed (m/s)
-  u: 0,          // lateral velocity (m/s)
-  r: 0,          // yaw rate (rad/s)
-  steer: 0,      // steer angle (rad)
-  slip: 0,
-};
-
-// 차체/축거리(대충)
-const VEH = {
-  mass: 1500,
-  wheelBase: 2.65,
-  lf: 1.25,
-  lr: 1.40,
-};
-
-// 아케이드 안정화 파라미터
-const PHYS = {
-  steerResponse: 18.0,       // 스티어 반응
-  yawDamp: 10.0,             // yawrate 감쇠
-  latDamp: 16.0,             // 측면 속도 감쇠(질질 방지 핵심)
-  gripBuild: 10.0,           // 타이어 힘 응답 속도
-  lowSpeedAssist: 0.35,      // 저속에서 방향 전환 보조
-  handbrakeGripMul: 0.55,
-  drag0: 0.020,
-  drag1: 0.0024,
-};
-
-function loadCar(i){
-  carIndex = (i + CAR_PRESETS.length) % CAR_PRESETS.length;
-  const p = CAR_PRESETS[carIndex];
-  carRoot.clear();
-  car = makeCar(p.color);
-  carRoot.add(car);
-
-  resetAll(false);
-  document.getElementById('hudCar').textContent = p.name;
-  document.getElementById('stats').textContent = `vmax ${p.vmax}km/h · accel ${p.accel} · brake ${p.brake} · steerMax ${p.steerMax}° · mu ${p.mu}`;
-  applyHeadlight();
-}
-
-function resetAll(rebuildRoad=true){
-  state.x=0; state.z=0; state.yaw=0; state.v=0; state.u=0; state.r=0; state.steer=0; state.slip=0;
-  worldProgress = 0;
-  lastRecycleAt = 0;
-  if (rebuildRoad) buildRoad();
-}
-
-// ===== 입력 =====
-const keys = new Set();
-addEventListener('keydown', (e)=>{ keys.add(e.code); if (e.code==='KeyR') resetAll(true); });
-addEventListener('keyup', (e)=> keys.delete(e.code));
-function down(code){ return keys.has(code); }
-
-const invertSteerEl = document.getElementById('invertSteer');
-function steerInput(){
-  const L = down('KeyA') ? 1 : 0;
-  const R = down('KeyD') ? 1 : 0;
-  let s = (R - L);
-  if (invertSteerEl.checked) s = -s;
-  return s;
-}
-
-// ===== 낮/밤/안개/라이트 =====
-let isNight = false;
-let headOn = false;
-
-function applyTime(){
-  const u = sky.material.uniforms;
-  if (isNight){
-    u.topColor.value.set(0x16224a);
-    u.midColor.value.set(0x0a1026);
-    u.botColor.value.set(0x05070e);
-    sunMoon.intensity = 0.85;
-    fill.intensity = 0.25;
-    renderer.toneMappingExposure = 1.05;
-    groundMat.color.set(0x0b1224);
-  } else {
-    u.topColor.value.set(0x8fd3ff);
-    u.midColor.value.set(0x4d8bff);
-    u.botColor.value.set(0xd9f2ff);
-    sunMoon.intensity = 0.35;
-    fill.intensity = 0.35;
-    renderer.toneMappingExposure = 1.25;
-    groundMat.color.set(0xd7e7ff);
-  }
-  setFog(isNight);
-  document.getElementById('hudTime').textContent = isNight ? 'NIGHT' : 'DAY';
-  applyHeadlight();
-}
-
-function applyFogUI(){
-  setFog(isNight);
-  document.getElementById('hudFog').textContent = fogOn ? 'ON' : 'OFF';
-}
-
-function applyHeadlight(){
-  if (!car) return;
-  const spot = car.userData.headLight;
-  const beam = car.userData.headBeam;
-  const heads = car.userData.headMeshes;
-  if (spot) spot.intensity = headOn ? 3.2 : 0;
-  const base = headOn ? (isNight ? 0.24 : 0.12) : 0.0;
-  if (beam?.material) beam.material.opacity = base;
-  heads?.forEach(m=>{ if(m?.material){ m.material.emissiveIntensity = headOn ? 1.15 : 0.40; } });
-  document.getElementById('hudLight').textContent = headOn ? 'ON' : 'OFF';
-}
-
-addEventListener('keydown', (e)=>{
-  if (e.code==='KeyP'){ isNight=!isNight; applyTime(); }
-  if (e.code==='KeyM'){ fogOn=!fogOn; applyFogUI(); }
-  if (e.code==='KeyL'){ headOn=!headOn; applyHeadlight(); }
-});
-
-// =========================
-// 5) Physics Step
-// =========================
-let safeFlag = 'OK';
-
-function step(dt){
-  dt = clamp(dt, 0, 0.05);
-  const p = CAR_PRESETS[carIndex];
-
-  const throttle = down('KeyW') ? 1 : 0;
-  const brake = down('KeyS') ? 1 : 0;
-  const hand = down('Space') ? 1 : 0;
-
-  // --- Longitudinal ---
-  const vmax = mps(p.vmax);
-  const drag = PHYS.drag0 + PHYS.drag1 * Math.abs(state.v);
-  let ax = 0;
-
-  // 최고속 접근형 가속(간단)
-  const accelScale = clamp(1 - Math.max(0,state.v)/(vmax+1e-3), 0, 1);
-  ax += throttle * p.accel * (0.35 + 0.65*accelScale);
-  ax -= brake * p.brake;
-  ax -= state.v * drag;
-  if (hand) ax -= Math.sign(state.v) * 3.2;
-
-  state.v = safe(state.v + ax*dt, 0);
-  state.v = clamp(state.v, -vmax*0.20, vmax);
-
-  // --- Steering (input -> steer angle) ---
-  const sIn = steerInput();
-  const steerMax = rad(p.steerMax);
-
-  // 속도 높을수록 최대 조향 줄이기
-  const speedFactor = clamp(1 - Math.abs(state.v)/(vmax+1e-3), 0.22, 1);
-  const steerTarget = sIn * steerMax * speedFactor;
-  state.steer = expSmooth(state.steer, steerTarget, PHYS.steerResponse, dt);
-
-  // --- Bicycle model-ish lateral dynamics ---
-  // 저속에서 모델이 너무 무뎌지는 것 보정(아케이드)
-  const vAbs = Math.max(0.5, Math.abs(state.v));
-
-  // slip angle approximation: beta ≈ atan2(u, v)
-  const beta = Math.atan2(state.u, vAbs);
-
-  // 타이어 한계: a_lat_max = mu * g
-  const mu = p.mu * (hand ? PHYS.handbrakeGripMul : 1.0);
-  const g = 9.81;
-  const aLatMax = mu * g;
-
-  // 목표 yaw rate: r_target ≈ v/L * tan(steer)
-  const rTarget = (state.v / VEH.wheelBase) * Math.tan(state.steer);
-
-  // yaw rate dynamics + 감쇠
-  state.r = expSmooth(state.r, rTarget, PHYS.gripBuild, dt);
-  state.r *= Math.exp(-PHYS.yawDamp * dt);
-
-  // lateral accel needed: a_lat ≈ v * r
-  let aLat = state.v * state.r;
-
-  // 타이어 한계 적용(클램프)
-  aLat = clamp(aLat, -aLatMax, +aLatMax);
-
-  // lateral velocity update
-  state.u = safe(state.u + aLat * dt, 0);
-
-  // "질질" 방지: 측면 속도 강 감쇠 + 입력 없을수록 더 강하게
-  const noSteer = Math.abs(sIn) < 0.02;
-  const latD = noSteer ? (PHYS.latDamp * 1.8) : PHYS.latDamp;
-  state.u *= Math.exp(-latD * dt);
-
-  // yaw integrate
-  state.yaw = safe(state.yaw + state.r * dt, 0);
-
-  // lateral position integrate (player space)
-  state.x = safe(state.x + state.u * dt, 0);
-
-  // ===== Guardrail collision (hard) =====
-  // car half-width(대충) 고려
-  const carHalf = 0.95;
-  const limit = (ROAD.width * 0.5) - carHalf;
-  if (state.x > limit){
-    state.x = limit;
-    state.u = 0;
-    state.v *= RAIL.speedDamp;
-  } else if (state.x < -limit){
-    state.x = -limit;
-    state.u = 0;
-    state.v *= RAIL.speedDamp;
-  }
-
-  // ===== World progress (only forward) =====
-  worldProgress += Math.max(0, state.v) * dt;
-  worldProgress = safe(worldProgress, 0);
-
-  // ===== Apply transforms =====
-  roadGroup.position.z = -worldProgress;
-  roadGroup.position.x = -state.x * 0.35;
-
-  // car
-  carRoot.position.set(state.x, 0, 0);
-  carRoot.rotation.y = state.yaw;
-
-  // wheels
-  if (car){
-    const spin = state.v * dt * 2.35;
-    car.userData.wheels.forEach((w, i)=>{
-      w.rotation.x += spin;
-      if (i<2) w.rotation.y = state.steer * 0.30;
+  <div id="toast"></div>
+
+  <!-- Three.js (module) -->
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+    // ---------- UI ----------
+    const $ = (id)=>document.getElementById(id);
+    const carSelect = $('carSelect');
+    const roadWidthEl = $('roadWidth');
+    const gripEl = $('grip');
+    const steerSensEl = $('steerSens');
+    const resetBtn = $('resetBtn');
+    const pauseBtn = $('pauseBtn');
+    const spdEl = $('spd');
+    const yawEl = $('yaw');
+    const stateEl = $('state');
+    const pillHead = $('pillHead');
+    const pillDay  = $('pillDay');
+    const pillFog  = $('pillFog');
+    const toast = $('toast');
+
+    const showToast = (msg)=>{
+      toast.textContent = msg;
+      toast.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(()=>toast.classList.remove('show'), 1100);
+    };
+
+    // ---------- Presets ----------
+    // topSpeed in km/h target, accel in m/s^2-ish scale, mass affects inertia (turn response), brake strength
+    const CAR_PRESETS = [
+      { name:'Hyundai IONIQ 5 N', topSpeed:150, accel:7.0, brake:10.0, mass:1450, steerLimitDeg:32 },
+      { name:'Mazda Furai',       topSpeed:250, accel:8.2, brake:11.0, mass:1200, steerLimitDeg:30 },
+      { name:'Huracán EVO Spyder',topSpeed:330, accel:9.0, brake:12.0, mass:1350, steerLimitDeg:28 },
+      { name:'Agera RS',         topSpeed:400, accel:10.5, brake:13.0, mass:1400, steerLimitDeg:26 },
+      { name:'Devel Sixteen',    topSpeed:552, accel:13.0, brake:15.0, mass:1650, steerLimitDeg:24 },
+    ];
+
+    CAR_PRESETS.forEach((c,i)=>{
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = c.name;
+      carSelect.appendChild(opt);
     });
-  }
 
-  // slip info
-  state.slip = beta;
+    // ---------- Three Scene ----------
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
 
-  recycleRoad();
+    const scene = new THREE.Scene();
 
-  safeFlag = 'OK';
-  if ([state.x,state.v,state.u,state.yaw,state.r,state.steer,worldProgress].some(isBad)) safeFlag = 'GUARD';
-}
+    const camera = new THREE.PerspectiveCamera(65, window.innerWidth/window.innerHeight, 0.1, 1200);
+    camera.position.set(0, 6.5, 12);
 
-// =========================
-// 6) 카메라
-// =========================
-const cam = { px:0, py:7.2, pz:14, lx:0, ly:1.2, lz:0 };
-function stepCamera(dt){
-  dt = clamp(dt, 0, 0.05);
-  const sp = Math.abs(kmh(state.v));
+    // Lights (day/night toggle)
+    const hemi = new THREE.HemisphereLight(0xbfd7ff, 0x0b0f16, 0.9);
+    scene.add(hemi);
 
-  const forward = new THREE.Vector3(Math.sin(state.yaw), 0, Math.cos(state.yaw));
-  const up = new THREE.Vector3(0,1,0);
+    const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+    sun.position.set(40, 60, -10);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048,2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 220;
+    sun.shadow.camera.left = -80;
+    sun.shadow.camera.right = 80;
+    sun.shadow.camera.top = 80;
+    sun.shadow.camera.bottom = -80;
+    scene.add(sun);
 
-  const dist = clamp(10 + sp*0.03, 10, 26);
-  const height = clamp(5.8 + sp*0.012, 5.8, 10.5);
+    // Fog (toggle)
+    let fogOn = false;
+    const fog = new THREE.Fog(0x0c1220, 35, 170);
 
-  const carPos = new THREE.Vector3(state.x, 0, 0);
-  const targetPos = carPos.clone().addScaledVector(forward, -dist).addScaledVector(up, height);
-  const targetLook= carPos.clone().addScaledVector(up, 1.25).addScaledVector(forward, clamp(3+sp*0.01, 3, 9));
+    // Ground
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(900, 900, 1, 1),
+      new THREE.MeshStandardMaterial({ color: 0x16202c, roughness: 1.0, metalness: 0.0 })
+    );
+    ground.rotation.x = -Math.PI/2;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-  camera.position.lerp(targetPos, 1 - Math.exp(-6.0*dt));
-  const look = new THREE.Vector3(cam.lx, cam.ly, cam.lz).lerp(targetLook, 1 - Math.exp(-8.0*dt));
-  cam.lx = look.x; cam.ly = look.y; cam.lz = look.z;
+    // Road (endless tiles)
+    const roadGroup = new THREE.Group();
+    scene.add(roadGroup);
 
-  camera.position.y = clamp(camera.position.y, 2.0, 26.0);
-  camera.up.set(0,1,0);
-  camera.lookAt(look);
-}
+    const roadMat = new THREE.MeshStandardMaterial({ color: 0x252a31, roughness: 0.9, metalness: 0.0 });
+    const laneMat = new THREE.MeshStandardMaterial({ color: 0xe9f0ff, roughness: 0.4, metalness: 0.0, emissive:0x0, emissiveIntensity:0.0 });
 
-// =========================
-// 7) UI/옵션 연결
-// =========================
-const carSelect = document.getElementById('carSelect');
-CAR_PRESETS.forEach((c, i)=>{
-  const o = document.createElement('option');
-  o.value = String(i);
-  o.textContent = c.name;
-  carSelect.appendChild(o);
-});
-carSelect.addEventListener('change', ()=> loadCar(parseInt(carSelect.value,10)||0));
+    let ROAD_WIDTH = Number(roadWidthEl.value);
+    const ROAD_LEN = 70;
+    const TILE_COUNT = 10;
 
-document.getElementById('resetBtn').addEventListener('click', ()=> resetAll(true));
+    const tiles = [];
 
-let paused = false;
-document.getElementById('pauseBtn').addEventListener('click', ()=>{
-  paused = !paused;
-  document.getElementById('pauseBtn').textContent = paused ? '재개' : '일시정지';
-});
+    function makeTile(z){
+      const g = new THREE.Group();
 
-// 도로 폭
-const roadWidthInput = document.getElementById('roadWidth');
-const roadWidthVal = document.getElementById('roadWidthVal');
-roadWidthInput.value = String(ROAD.width);
-roadWidthVal.textContent = String(ROAD.width);
-roadWidthInput.addEventListener('input', ()=>{
-  ROAD.width = parseFloat(roadWidthInput.value);
-  roadWidthVal.textContent = String(Math.round(ROAD.width));
-  buildRoad();
-});
+      const road = new THREE.Mesh(new THREE.BoxGeometry(ROAD_WIDTH, 0.35, ROAD_LEN), roadMat);
+      road.position.y = 0.175;
+      road.castShadow = false;
+      road.receiveShadow = true;
+      g.add(road);
 
-// 레일 높이
-const railHeightInput = document.getElementById('railHeight');
-const railHeightVal = document.getElementById('railHeightVal');
-railHeightInput.value = String(RAIL.height);
-railHeightVal.textContent = String(RAIL.height);
-railHeightInput.addEventListener('input', ()=>{
-  RAIL.height = parseFloat(railHeightInput.value);
-  railHeightVal.textContent = String(Math.round(RAIL.height*10)/10);
-  buildRoad();
-});
+      // Lane dashed lines
+      const dashCount = 10;
+      for(let i=0;i<dashCount;i++){
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.02, ROAD_LEN/(dashCount*1.7)), laneMat);
+        dash.position.set(0, 0.38, -ROAD_LEN/2 + (i+0.5)*(ROAD_LEN/dashCount));
+        dash.receiveShadow = false;
+        g.add(dash);
+      }
 
-// =========================
-// 8) 리사이즈
-// =========================
-const vv = window.visualViewport;
-function resize(){
-  const w = Math.floor(vv?.width ?? innerWidth);
-  const h = Math.floor(vv?.height ?? innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
-  renderer.setSize(w, h, true);
-  camera.aspect = w/h;
-  camera.updateProjectionMatrix();
-}
-addEventListener('resize', resize, {passive:true});
-vv?.addEventListener('resize', resize, {passive:true});
-resize();
+      // Guardrails (physics is handled via clamp & bounce + visuals)
+      const railH = 0.8;
+      const railT = 0.25;
+      const railOffset = ROAD_WIDTH/2 + 0.65;
+      const railMat = new THREE.MeshStandardMaterial({ color: 0x3a4049, roughness: 0.6, metalness: 0.25 });
 
-// =========================
-// 9) 루프
-// =========================
-loadCar(0);
-carSelect.value = '0';
-applyTime();
-applyFogUI();
-applyHeadlight();
+      const leftRail = new THREE.Mesh(new THREE.BoxGeometry(railT, railH, ROAD_LEN), railMat);
+      leftRail.position.set(-railOffset, railH/2, 0);
+      leftRail.castShadow = true;
+      leftRail.receiveShadow = true;
+      g.add(leftRail);
 
-const hudSpeed = document.getElementById('hudSpeed');
-const hudSteer = document.getElementById('hudSteer');
-const hudSlip  = document.getElementById('hudSlip');
-const hudYaw   = document.getElementById('hudYaw');
-const hudSafe  = document.getElementById('hudSafe');
+      const rightRail = new THREE.Mesh(new THREE.BoxGeometry(railT, railH, ROAD_LEN), railMat);
+      rightRail.position.set(railOffset, railH/2, 0);
+      rightRail.castShadow = true;
+      rightRail.receiveShadow = true;
+      g.add(rightRail);
 
-let last = performance.now();
-function loop(now){
-  const dt = clamp((now-last)/1000, 0, 0.05);
-  last = now;
+      g.position.z = z;
+      return g;
+    }
 
-  if (!paused){
-    step(dt);
-    stepCamera(dt);
-  }
+    function rebuildRoad(){
+      ROAD_WIDTH = Number(roadWidthEl.value);
+      // remove old tiles
+      for(const t of tiles){ roadGroup.remove(t); }
+      tiles.length = 0;
+      // rebuild
+      for(let i=0;i<TILE_COUNT;i++){
+        const z = -i*ROAD_LEN;
+        const tile = makeTile(z);
+        tiles.push(tile);
+        roadGroup.add(tile);
+      }
+      showToast(`도로 폭: ${ROAD_WIDTH.toFixed(0)}m`);
+    }
 
-  hudSpeed.textContent = String(Math.round(Math.abs(kmh(state.v))));
-  hudSteer.textContent = String(Math.round(deg(state.steer)));
-  hudSlip.textContent  = String(Math.round(deg(state.slip)));
-  hudYaw.textContent   = String(Math.round(deg(state.r)));
-  hudSafe.textContent  = safeFlag;
+    rebuildRoad();
 
-  renderer.render(scene, camera);
-  requestAnimationFrame(loop);
-}
-requestAnimationFrame(loop);
+    // Car model (simple)
+    const car = new THREE.Group();
+    scene.add(car);
 
-</script>
+    const body = new THREE.Mesh(
+      new THREE.BoxGeometry(1.75, 0.6, 3.6),
+      new THREE.MeshStandardMaterial({ color: 0x3b82f6, roughness: 0.45, metalness: 0.35 })
+    );
+    body.castShadow = true;
+    body.receiveShadow = true;
+    body.position.y = 0.55;
+    car.add(body);
+
+    const cabin = new THREE.Mesh(
+      new THREE.BoxGeometry(1.45, 0.55, 1.6),
+      new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.15, metalness: 0.2, transparent:true, opacity:0.85 })
+    );
+    cabin.castShadow = true;
+    cabin.position.set(0, 0.95, -0.1);
+    car.add(cabin);
+
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0b0f16, roughness: 0.95, metalness: 0.05 });
+    const wheelGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.24, 18);
+    function addWheel(x,z){
+      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      w.rotation.z = Math.PI/2;
+      w.position.set(x, 0.32, z);
+      w.castShadow = true;
+      car.add(w);
+      return w;
+    }
+    const wFL = addWheel(-0.85, 1.2);
+    const wFR = addWheel( 0.85, 1.2);
+    const wRL = addWheel(-0.85,-1.2);
+    const wRR = addWheel( 0.85,-1.2);
+
+    // Headlights
+    const headlightL = new THREE.SpotLight(0xffffff, 0.0, 90, THREE.MathUtils.degToRad(20), 0.25, 1.4);
+    headlightL.position.set(-0.45, 0.85, 1.65);
+    headlightL.target.position.set(-0.45, 0.3, 20);
+    headlightL.castShadow = false;
+    car.add(headlightL);
+    car.add(headlightL.target);
+
+    const headlightR = new THREE.SpotLight(0xffffff, 0.0, 90, THREE.MathUtils.degToRad(20), 0.25, 1.4);
+    headlightR.position.set(0.45, 0.85, 1.65);
+    headlightR.target.position.set(0.45, 0.3, 20);
+    headlightR.castShadow = false;
+    car.add(headlightR);
+    car.add(headlightR.target);
+
+    let headlightsOn = false;
+
+    // ---------- Physics ----------
+    const state = {
+      paused: false,
+      // pose
+      pos: new THREE.Vector3(0, 0, 0),
+      yaw: 0,                 // radians
+      // velocities (car local frame)
+      vForward: 0,            // m/s
+      vSide: 0,               // m/s (lateral slip)
+      // input
+      throttle: 0,
+      brake: 0,
+      steer: 0,
+      handbrake: 0,
+      // car params
+      presetIndex: 2,
+      params: null,
+    };
+
+    function applyPreset(i){
+      state.presetIndex = i;
+      const p = CAR_PRESETS[i];
+      state.params = {
+        topSpeed: p.topSpeed / 3.6, // m/s
+        accel: p.accel,
+        brake: p.brake,
+        mass: p.mass,
+        steerLimit: THREE.MathUtils.degToRad(p.steerLimitDeg),
+      };
+      // subtle car color per preset
+      const colors = [0x60a5fa,0xf97316,0xef4444,0xa78bfa,0x22c55e];
+      body.material.color.setHex(colors[i % colors.length]);
+      showToast(`차량: ${p.name}`);
+    }
+
+    applyPreset(state.presetIndex);
+    carSelect.value = String(state.presetIndex);
+
+    function reset(){
+      state.pos.set(0,0,0);
+      state.yaw = 0;
+      state.vForward = 0;
+      state.vSide = 0;
+      // keep road centered
+      roadGroup.position.set(0,0,0);
+      showToast('리셋 완료');
+    }
+
+    // Input
+    const keys = new Set();
+    window.addEventListener('keydown', (e)=>{
+      if(e.repeat) return;
+      keys.add(e.code);
+
+      if(e.code === 'KeyL'){
+        headlightsOn = !headlightsOn;
+        headlightL.intensity = headlightsOn ? 2.2 : 0.0;
+        headlightR.intensity = headlightsOn ? 2.2 : 0.0;
+        pillHead.className = 'dot ' + (headlightsOn ? 'on' : '');
+        showToast(`헤드라이트: ${headlightsOn ? 'ON' : 'OFF'}`);
+      }
+      if(e.code === 'KeyP'){
+        // day/night
+        const isNight = sun.intensity > 0.2;
+        if(isNight){
+          sun.intensity = 0.18;
+          hemi.intensity = 0.35;
+          scene.background = new THREE.Color(0x060814);
+          laneMat.emissive = new THREE.Color(0xe9f0ff);
+          laneMat.emissiveIntensity = 0.25;
+          pillDay.className = 'dot';
+          showToast('밤 모드');
+        }else{
+          sun.intensity = 1.1;
+          hemi.intensity = 0.9;
+          scene.background = null;
+          laneMat.emissiveIntensity = 0.0;
+          pillDay.className = 'dot on';
+          showToast('낮 모드');
+        }
+      }
+      if(e.code === 'KeyM'){
+        fogOn = !fogOn;
+        scene.fog = fogOn ? fog : null;
+        pillFog.className = 'dot ' + (fogOn ? 'on' : '');
+        showToast(`안개: ${fogOn ? 'ON' : 'OFF'}`);
+      }
+
+      if(e.code === 'KeyR') reset();
+      if(e.code === 'Escape') togglePause();
+    });
+
+    window.addEventListener('keyup', (e)=>{
+      keys.delete(e.code);
+    });
+
+    function togglePause(){
+      state.paused = !state.paused;
+      stateEl.textContent = state.paused ? 'PAUSE' : 'RUN';
+      pauseBtn.textContent = state.paused ? '재개' : '일시정지';
+      showToast(state.paused ? '일시정지' : '재개');
+    }
+
+    resetBtn.addEventListener('click', reset);
+    pauseBtn.addEventListener('click', togglePause);
+
+    carSelect.addEventListener('change', ()=>{
+      applyPreset(Number(carSelect.value));
+      reset();
+    });
+
+    roadWidthEl.addEventListener('input', ()=>{
+      rebuildRoad();
+    });
+
+    // ---------- Camera follow ----------
+    const camOffset = new THREE.Vector3(0, 6.2, 12.5);
+
+    // ---------- Simulation loop ----------
+    const clock = new THREE.Clock();
+
+    function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
+
+    function updateInput(){
+      const w = keys.has('KeyW') || keys.has('ArrowUp');
+      const s = keys.has('KeyS') || keys.has('ArrowDown');
+      const a = keys.has('KeyA') || keys.has('ArrowLeft');
+      const d = keys.has('KeyD') || keys.has('ArrowRight');
+      const space = keys.has('Space');
+
+      // throttle / brake are analog-ish
+      state.throttle = w ? 1 : 0;
+      state.brake = s ? 1 : 0;
+      state.steer = (a ? 1 : 0) + (d ? -1 : 0); // left +, right -
+      state.handbrake = space ? 1 : 0;
+    }
+
+    function step(dt){
+      updateInput();
+
+      const p = state.params;
+      const grip = Number(gripEl.value);               // 0.6~0.98 (higher = less drift)
+      const steerSens = Number(steerSensEl.value);     // UI scalar
+
+      // --- Longitudinal forces ---
+      // Engine: reduces as you approach top speed
+      const speedAbs = Math.abs(state.vForward);
+      const speedRatio = clamp(speedAbs / p.topSpeed, 0, 1);
+      const engine = state.throttle * p.accel * (1.0 - 0.55*speedRatio);
+
+      // Brake: strong opposing force
+      const braking = state.brake * p.brake;
+
+      // Integrate forward speed
+      // If braking and moving forward -> decel; if braking and near 0 -> reverse allowed
+      let aForward = engine;
+      if(state.brake > 0){
+        aForward -= Math.sign(state.vForward || 1) * braking;
+      }
+
+      state.vForward += aForward * dt;
+
+      // Limit top speed (forward & reverse)
+      const maxF = p.topSpeed;
+      const maxR = maxF * 0.28;
+      state.vForward = clamp(state.vForward, -maxR, maxF);
+
+      // Rolling resistance / air drag
+      const drag = 0.55 + 1.35*speedRatio; // increases with speed
+      state.vForward *= Math.exp(-drag * dt * 0.12);
+
+      // --- Steering ---
+      // Speed-based steering: low speed -> less effect, high speed -> stronger but limited
+      const steerLimit = p.steerLimit;
+      const steerInput = clamp(state.steer, -1, 1);
+
+      const steerGain = (0.25 + 0.75*clamp(speedAbs / 14.0, 0, 1));
+      const steerAngle = steerInput * steerLimit * steerGain * steerSens;
+
+      // Yaw rate roughly proportional to forward speed and steer angle
+      // Longer "wheelbase" reduces yaw rate (simulate heavier cars)
+      const wheelbase = 2.7;
+      const inertia = clamp(p.mass / 1400, 0.85, 1.35);
+      const yawRate = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia;
+      state.yaw += yawRate * dt;
+
+      // --- Lateral dynamics (simple slip model) ---
+      // Convert forward movement into lateral slip when turning. Handbrake increases slip.
+      const slipAdd = Math.abs(yawRate) * (2.2 + 4.0*state.handbrake) * dt;
+      state.vSide += Math.sign(steerInput) * slipAdd * Math.sign(state.vForward || 1);
+
+      // Apply grip to kill lateral velocity (this fixes "angle changes but direction stays" feel)
+      // Higher grip -> faster lateral damping
+      const sideDamp = 1.0 - grip;
+      state.vSide *= Math.exp(- (3.0 + 10.0*sideDamp) * dt);
+
+      // Handbrake also reduces forward speed a bit
+      if(state.handbrake){
+        state.vForward *= Math.exp(-2.2 * dt);
+      }
+
+      // --- Move in world space ---
+      // Key point: velocity vector rotates with yaw (movement follows car direction)
+      const sin = Math.sin(state.yaw);
+      const cos = Math.cos(state.yaw);
+
+      // car local -> world
+      const vx = sin * state.vForward + cos * state.vSide;
+      const vz = cos * state.vForward - sin * state.vSide;
+
+      state.pos.x += vx * dt;
+      state.pos.z += vz * dt;
+
+      // --- Road boundaries & "guardrail collision" ---
+      const half = ROAD_WIDTH / 2;
+      const margin = 1.25; // car half width + cushion
+      const limit = half - margin;
+
+      if(state.pos.x > limit){
+        state.pos.x = limit;
+        // bounce: reflect lateral speed + lose forward speed
+        state.vSide *= -0.35;
+        state.vForward *= 0.78;
+      }
+      if(state.pos.x < -limit){
+        state.pos.x = -limit;
+        state.vSide *= -0.35;
+        state.vForward *= 0.78;
+      }
+
+      // --- Endless road tile recycling ---
+      // Keep tiles around the car along Z.
+      // Find the farthest tile behind and move it ahead when needed.
+      const carZ = state.pos.z;
+      for(const t of tiles){
+        const worldZ = t.position.z;
+        // if tile is too far behind the car, move it ahead
+        if(worldZ > carZ + ROAD_LEN){
+          // Note: tiles are laid negative initially, but carZ may go negative too depending on direction.
+          // We'll reposition based on the smallest z among tiles.
+          let minZ = Infinity;
+          for(const u of tiles) minZ = Math.min(minZ, u.position.z);
+          t.position.z = minZ - ROAD_LEN;
+        }
+        if(worldZ < carZ - ROAD_LEN*(TILE_COUNT-2)){
+          let maxZ = -Infinity;
+          for(const u of tiles) maxZ = Math.max(maxZ, u.position.z);
+          t.position.z = maxZ + ROAD_LEN;
+        }
+      }
+
+      // --- Update visuals ---
+      car.position.set(state.pos.x, 0, state.pos.z);
+      car.rotation.y = -state.yaw;
+
+      // wheel spin
+      const wheelSpin = state.vForward * dt * 2.4;
+      wFL.rotation.x += wheelSpin;
+      wFR.rotation.x += wheelSpin;
+      wRL.rotation.x += wheelSpin;
+      wRR.rotation.x += wheelSpin;
+
+      // camera follow (smooth)
+      const desired = new THREE.Vector3().copy(camOffset).applyAxisAngle(new THREE.Vector3(0,1,0), -state.yaw).add(car.position);
+      camera.position.lerp(desired, 1 - Math.exp(-6.5*dt));
+      const lookAt = new THREE.Vector3().copy(car.position).add(new THREE.Vector3(0, 1.2, -2).applyAxisAngle(new THREE.Vector3(0,1,0), -state.yaw));
+      camera.lookAt(lookAt);
+
+      // HUD
+      const kmh = Math.abs(state.vForward) * 3.6;
+      spdEl.textContent = `${kmh.toFixed(0)} km/h`;
+      yawEl.textContent = `${(THREE.MathUtils.radToDeg(state.yaw)%360+360)%360|0}°`;
+    }
+
+    function animate(){
+      const dt = Math.min(clock.getDelta(), 0.033);
+      if(!state.paused){
+        step(dt);
+      }
+      renderer.render(scene, camera);
+      requestAnimationFrame(animate);
+    }
+
+    // Resize
+    window.addEventListener('resize', ()=>{
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    });
+
+    // Init pills
+    pillHead.className = 'dot';
+    pillFog.className = 'dot';
+
+    // Start
+    showToast('준비 완료 — W로 가속!');
+    animate();
+  </script>
 </body>
 </html>
