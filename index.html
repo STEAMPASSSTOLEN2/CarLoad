@@ -320,17 +320,17 @@
     const wRL = addWheel(-0.85,-1.2);
     const wRR = addWheel( 0.85,-1.2);
 
-    // Headlights
+    // Headlights (항상 차 전방을 향하도록 target을 로컬 +Z에 고정)
     const headlightL = new THREE.SpotLight(0xffffff, 0.0, 90, THREE.MathUtils.degToRad(20), 0.25, 1.4);
     headlightL.position.set(-0.45, 0.85, 1.65);
-    headlightL.target.position.set(-0.45, 0.3, 20);
+    headlightL.target.position.set(-0.45, 0.85, -6.0);
     headlightL.castShadow = false;
     car.add(headlightL);
     car.add(headlightL.target);
 
     const headlightR = new THREE.SpotLight(0xffffff, 0.0, 90, THREE.MathUtils.degToRad(20), 0.25, 1.4);
     headlightR.position.set(0.45, 0.85, 1.65);
-    headlightR.target.position.set(0.45, 0.3, 20);
+    headlightR.target.position.set(0.45, 0.85, -6.0);
     headlightR.castShadow = false;
     car.add(headlightR);
     car.add(headlightR.target);
@@ -461,16 +461,19 @@
     function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
 
     function updateInput(){
+      // 포커스가 게임 캔버스/문서에 있을 때만 입력 허용 (UI 클릭 시 오작동 방지)
+      if(document.activeElement && ['INPUT','SELECT','BUTTON','TEXTAREA'].includes(document.activeElement.tagName)){
+        state.throttle = 0; state.brake = 0; state.steer = 0; state.handbrake = 0; return;
+      }
       const w = keys.has('KeyW') || keys.has('ArrowUp');
       const s = keys.has('KeyS') || keys.has('ArrowDown');
       const a = keys.has('KeyA') || keys.has('ArrowLeft');
       const d = keys.has('KeyD') || keys.has('ArrowRight');
       const space = keys.has('Space');
 
-      // throttle / brake are analog-ish
       state.throttle = w ? 1 : 0;
       state.brake = s ? 1 : 0;
-      state.steer = (a ? 1 : 0) + (d ? -1 : 0); // left +, right -
+      state.steer = (a ? 1 : 0) + (d ? -1 : 0);
       state.handbrake = space ? 1 : 0;
     }
 
@@ -539,13 +542,15 @@
       }
 
       // --- Move in world space ---
-      // Key point: velocity vector rotates with yaw (movement follows car direction)
+      // 좌표계 기준: 카메라가 +Z 쪽에 있으므로, 차의 "전방"을 -Z로 정의 (W 누르면 화면 안쪽으로 달림)
       const sin = Math.sin(state.yaw);
       const cos = Math.cos(state.yaw);
 
-      // car local -> world
+      // local(car) -> world
+      // forward(-Z) = (sin, 0, -cos)
+      // right(+X)   = (cos, 0,  sin)
       const vx = sin * state.vForward + cos * state.vSide;
-      const vz = cos * state.vForward - sin * state.vSide;
+      const vz = -cos * state.vForward + sin * state.vSide;
 
       state.pos.x += vx * dt;
       state.pos.z += vz * dt;
@@ -590,7 +595,7 @@
 
       // --- Update visuals ---
       car.position.set(state.pos.x, 0, state.pos.z);
-      car.rotation.y = -state.yaw;
+      car.rotation.y = state.yaw;
 
       // wheel spin
       const wheelSpin = state.vForward * dt * 2.4;
@@ -600,9 +605,12 @@
       wRR.rotation.x += wheelSpin;
 
       // camera follow (smooth)
-      const desired = new THREE.Vector3().copy(camOffset).applyAxisAngle(new THREE.Vector3(0,1,0), -state.yaw).add(car.position);
+      const desired = new THREE.Vector3().copy(camOffset)
+        .applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw)
+        .add(car.position);
       camera.position.lerp(desired, 1 - Math.exp(-6.5*dt));
-      const lookAt = new THREE.Vector3().copy(car.position).add(new THREE.Vector3(0, 1.2, -2).applyAxisAngle(new THREE.Vector3(0,1,0), -state.yaw));
+      const lookAt = new THREE.Vector3().copy(car.position)
+        .add(new THREE.Vector3(0, 1.2, -2).applyAxisAngle(new THREE.Vector3(0,1,0), state.yaw));
       camera.lookAt(lookAt);
 
       // HUD
