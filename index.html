@@ -473,7 +473,8 @@
 
       state.throttle = w ? 1 : 0;
       state.brake = s ? 1 : 0;
-      state.steer = (a ? 1 : 0) + (d ? -1 : 0);
+      // 조향 방향 반전(사용자 체감 기준): A=우회전(-), D=좌회전(+)
+      state.steer = (a ? -1 : 0) + (d ? 1 : 0);
       state.handbrake = space ? 1 : 0;
     }
 
@@ -512,18 +513,27 @@
       state.vForward *= Math.exp(-drag * dt * 0.12);
 
       // --- Steering ---
-      // Speed-based steering: low speed -> less effect, high speed -> stronger but limited
+      // Speed-based steering + 입력 스무딩(휙휙 꺾임 방지)
       const steerLimit = p.steerLimit;
-      const steerInput = clamp(state.steer, -1, 1);
+      const steerInputRaw = clamp(state.steer, -1, 1);
 
-      const steerGain = (0.25 + 0.75*clamp(speedAbs / 14.0, 0, 1));
+      // 입력을 부드럽게 (프레임마다 급격히 변하지 않게)
+      state._steerSmoothed ??= 0;
+      const steerSmoothRate = 10.0; // 높을수록 빠르게 반응, 낮을수록 부드러움
+      const alpha = 1 - Math.exp(-steerSmoothRate * dt);
+      state._steerSmoothed = state._steerSmoothed + (steerInputRaw - state._steerSmoothed) * alpha;
+      const steerInput = state._steerSmoothed;
+
+      // 고속에서 너무 민감해지지 않도록 완만한 커브
+      const steerGain = (0.18 + 0.62 * clamp(speedAbs / 18.0, 0, 1));
       const steerAngle = steerInput * steerLimit * steerGain * steerSens;
 
       // Yaw rate roughly proportional to forward speed and steer angle
       // Longer "wheelbase" reduces yaw rate (simulate heavier cars)
       const wheelbase = 2.7;
       const inertia = clamp(p.mass / 1400, 0.85, 1.35);
-      const yawRate = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia;
+      // yawRate를 조금 눌러서(=회전 과민 방지) 현실감 있게
+      const yawRate = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia * 0.72;
       state.yaw += yawRate * dt;
 
       // --- Lateral dynamics (simple slip model) ---
