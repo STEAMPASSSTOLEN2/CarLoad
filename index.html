@@ -3,43 +3,44 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CarLoad Rebuild v1</title>
+  <title>CarLoad Rebuild v2 (Infinite Road)</title>
   <style>
     html, body { margin:0; padding:0; overflow:hidden; background:#05070e; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    #ui {
-      position:fixed; left:12px; top:12px; z-index:10;
+    #ui{
+      position:fixed; left:12px; top:12px; z-index:10; width: 340px;
       background: rgba(10,12,18,0.65); color:#e9eefc;
       border:1px solid rgba(255,255,255,0.12);
       border-radius:14px; padding:12px 12px 10px;
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 30px rgba(0,0,0,0.35);
-      width: 320px;
     }
-    #ui h1 { font-size:14px; margin:0 0 8px; font-weight:700; letter-spacing:0.2px; }
-    #row { display:flex; gap:8px; align-items:center; margin:6px 0; }
-    select, button {
+    #ui h1{ font-size:14px; margin:0 0 8px; font-weight:800; }
+    #row{ display:flex; gap:8px; align-items:center; margin:6px 0; flex-wrap: wrap; }
+    select, button, label{
       background: rgba(255,255,255,0.08); color:#e9eefc;
       border: 1px solid rgba(255,255,255,0.14);
       border-radius: 10px; padding: 8px 10px; outline:none;
       font-size: 13px;
     }
+    label{ display:flex; align-items:center; gap:8px; padding: 7px 10px; user-select:none; }
+    input[type="checkbox"]{ transform: translateY(1px); }
     button { cursor:pointer; }
     button:hover { background: rgba(255,255,255,0.12); }
-    .muted { color: rgba(233,238,252,0.75); font-size:12px; line-height:1.35; }
-    #stats { margin-top:8px; font-size:12px; line-height:1.5; }
-    #hud {
+    .muted{ color: rgba(233,238,252,0.75); font-size:12px; line-height:1.35; }
+    #stats{ margin-top:8px; font-size:12px; line-height:1.5; }
+    #hud{
       position:fixed; right:12px; top:12px; z-index:10;
       background: rgba(10,12,18,0.55); color:#e9eefc;
       border:1px solid rgba(255,255,255,0.12);
       border-radius:14px; padding:10px 12px;
       backdrop-filter: blur(10px);
-      min-width: 190px;
+      min-width: 200px;
       box-shadow: 0 8px 30px rgba(0,0,0,0.35);
       font-size:12px;
       line-height:1.45;
       text-align:right;
     }
-    #hint {
+    #hint{
       position:fixed; left:50%; bottom:14px; transform:translateX(-50%);
       z-index:10; color: rgba(233,238,252,0.85);
       font-size:12px;
@@ -50,16 +51,20 @@
       backdrop-filter: blur(10px);
       user-select:none;
     }
-    canvas { display:block; }
+    canvas{ display:block; }
   </style>
 </head>
 <body>
   <div id="ui">
-    <h1>CarLoad Rebuild v1</h1>
+    <h1>CarLoad Rebuild v2</h1>
     <div id="row">
       <select id="carSelect"></select>
       <button id="resetBtn">리셋</button>
       <button id="pauseBtn">일시정지</button>
+      <label title="체감이 반대면 켜봐">
+        <input id="invertSteer" type="checkbox" />
+        조향 반전
+      </label>
     </div>
     <div class="muted">
       조작: <b>W</b>가속 / <b>S</b>브레이크 / <b>A,D</b>조향 / <b>Space</b>핸드브레이크 / <b>R</b>리셋
@@ -70,46 +75,41 @@
   <div id="hud">
     <div><b id="hudCar">-</b></div>
     <div>속도: <b id="hudSpeed">0</b> km/h</div>
-    <div>기어: <b id="hudGear">D</b></div>
     <div>안전: <b id="hudSafe">OK</b></div>
+    <div>조향: <b id="hudSteer">A=← / D=→</b></div>
   </div>
 
-  <div id="hint">Tip: 속도가 빨라도 카메라가 차를 놓치지 않게 자동 보정됩니다.</div>
+  <div id="hint">무한 도로: 도로 청크를 재활용하며 계속 생성됩니다.</div>
 
 <script type="module">
 import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
 
 //
-// =========================
-// 유틸(안전장치 / NaN 방지)
-// =========================
+// ===== 안전 유틸 =====
 //
 const EPS = 1e-8;
-
 function isBad(n){ return !Number.isFinite(n) || Number.isNaN(n); }
 function safe(n, fallback=0){ return isBad(n) ? fallback : n; }
-function clamp(x, a, b){ x = safe(x, a); return Math.max(a, Math.min(b, x)); }
+function clamp(x,a,b){ x = safe(x,a); return Math.max(a, Math.min(b, x)); }
 function lerp(a,b,t){ return a + (b-a)*clamp(t,0,1); }
-function smoothDamp(current, target, lambda, dt){
-  dt = clamp(dt, 0, 0.05);
-  const t = 1 - Math.exp(-lambda * dt);
-  return lerp(current, target, t);
-}
 function vecSafe(v, fallback=new THREE.Vector3()){
   if (!v || isBad(v.x) || isBad(v.y) || isBad(v.z)) return fallback.clone();
   return v;
 }
+function expLerpVec(out, target, lambda, dt){
+  dt = clamp(dt, 0, 0.05);
+  const t = 1 - Math.exp(-lambda*dt);
+  out.lerp(target, t);
+}
 
 //
-// =========================
-// 기본 설정(씬/렌더러/카메라)
-// =========================
+// ===== 렌더/씬 =====
 //
 const canvas = document.createElement("canvas");
 document.body.appendChild(canvas);
 
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
 renderer.setSize(window.innerWidth, window.innerHeight, true);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -119,58 +119,47 @@ renderer.toneMappingExposure = 1.05;
 const scene = new THREE.Scene();
 scene.fog = new THREE.FogExp2(0x0a0f1e, 0.0075);
 
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1800);
-camera.position.set(0, 6, 12);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.set(0, 7, 14);
 
 //
-// =========================
-// 배경(스카이 돔 + 바닥)
-// =========================
+// ===== 스카이 =====
 //
-function makeSky(){
-  const geo = new THREE.SphereGeometry(900, 32, 16);
+(function makeSky(){
+  const geo = new THREE.SphereGeometry(950, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide,
     uniforms: {
-      topColor: { value: new THREE.Color(0x16224a) },
-      midColor: { value: new THREE.Color(0x0a1026) },
-      botColor: { value: new THREE.Color(0x05070e) },
-      offset:   { value: 0.08 },
-      exponent: { value: 0.8 }
+      topColor:{ value:new THREE.Color(0x16224a) },
+      midColor:{ value:new THREE.Color(0x0a1026) },
+      botColor:{ value:new THREE.Color(0x05070e) },
+      offset:{ value:0.08 },
+      exponent:{ value:0.8 }
     },
-    vertexShader: `
-      varying vec3 vWorldPos;
+    vertexShader:`varying vec3 vWorldPos;
+      void main(){ vec4 wpos=modelMatrix*vec4(position,1.0);
+        vWorldPos=wpos.xyz; gl_Position=projectionMatrix*viewMatrix*wpos; }`,
+    fragmentShader:`varying vec3 vWorldPos;
+      uniform vec3 topColor, midColor, botColor; uniform float offset, exponent;
       void main(){
-        vec4 wpos = modelMatrix * vec4(position, 1.0);
-        vWorldPos = wpos.xyz;
-        gl_Position = projectionMatrix * viewMatrix * wpos;
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vWorldPos;
-      uniform vec3 topColor;
-      uniform vec3 midColor;
-      uniform vec3 botColor;
-      uniform float offset;
-      uniform float exponent;
-      void main(){
-        float h = normalize(vWorldPos).y;
-        float t = pow(max(h + offset, 0.0), exponent);
-        vec3 col = mix(botColor, midColor, smoothstep(0.0, 0.45, t));
-        col = mix(col, topColor, smoothstep(0.35, 1.0, t));
-        gl_FragColor = vec4(col, 1.0);
-      }
-    `
+        float h=normalize(vWorldPos).y;
+        float t=pow(max(h+offset,0.0),exponent);
+        vec3 col=mix(botColor, midColor, smoothstep(0.0,0.45,t));
+        col=mix(col, topColor, smoothstep(0.35,1.0,t));
+        gl_FragColor=vec4(col,1.0);
+      }`
   });
   const sky = new THREE.Mesh(geo, mat);
-  sky.frustumCulled = false;
+  sky.frustumCulled=false;
   scene.add(sky);
-}
-makeSky();
+})();
 
+//
+// ===== 바닥 =====
+//
 const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(2200, 2200, 1, 1),
-  new THREE.MeshStandardMaterial({ color: 0x0b1224, roughness: 1.0, metalness: 0.0 })
+  new THREE.PlaneGeometry(2600, 2600, 1, 1),
+  new THREE.MeshStandardMaterial({ color:0x0b1224, roughness:1.0, metalness:0.0 })
 );
 ground.rotation.x = -Math.PI/2;
 ground.position.y = -0.02;
@@ -178,9 +167,7 @@ ground.receiveShadow = true;
 scene.add(ground);
 
 //
-// =========================
-// 라이트(그래픽 개선)
-// =========================
+// ===== 라이트 =====
 //
 scene.add(new THREE.AmbientLight(0x9fb0ff, 0.20));
 
@@ -189,11 +176,11 @@ moon.position.set(120, 180, 40);
 moon.castShadow = true;
 moon.shadow.mapSize.set(2048, 2048);
 moon.shadow.camera.near = 10;
-moon.shadow.camera.far  = 450;
-moon.shadow.camera.left = -140;
-moon.shadow.camera.right= 140;
-moon.shadow.camera.top  = 140;
-moon.shadow.camera.bottom=-140;
+moon.shadow.camera.far  = 520;
+moon.shadow.camera.left = -160;
+moon.shadow.camera.right= 160;
+moon.shadow.camera.top  = 160;
+moon.shadow.camera.bottom=-160;
 scene.add(moon);
 
 const fill = new THREE.DirectionalLight(0x6ea2ff, 0.25);
@@ -201,336 +188,67 @@ fill.position.set(-80, 80, -120);
 scene.add(fill);
 
 //
-// =========================
-// 도로(기초 틀 + 곡률 개선)
-// - centerline: 누적 진행거리 s로 샘플링
-// - 튀는 커브 방지: 곡률 제한 + 저주파 노이즈 느낌
-// =========================
-//
-const ROAD = {
-  width: 10,
-  length: 900,          // 가시구간 길이(앞쪽)
-  backLength: 160,      // 뒤쪽도 약간 깔기
-  step: 2.0,            // 샘플 간격
-  y: 0.0,
-  curvatureLimit: 0.010, // 너무 급커브 방지(작을수록 완만)
-  bankMax: 0.22,        // 뱅킹 최대(라디안 느낌)
-};
-
-let roadGroup = new THREE.Group();
-scene.add(roadGroup);
-
-// 진행거리 s -> (x,z) 곡선
-// 부드러운 방향 변화: heading을 누적하면서 곡률을 제한
-let roadSeed = 1337;
-function hash01(n){
-  // deterministic pseudo random [0,1)
-  const x = Math.sin(n * 127.1 + roadSeed * 0.013) * 43758.5453;
-  return x - Math.floor(x);
-}
-function noise1D(t){
-  // value noise
-  const i = Math.floor(t);
-  const f = t - i;
-  const a = hash01(i);
-  const b = hash01(i+1);
-  const u = f*f*(3-2*f);
-  return a + (b-a)*u; // 0..1
-}
-
-// centerline integrator state
-let heading = 0; // rad
-let xPos = 0;
-let zPos = 0;
-
-function resetRoadIntegrator(){
-  heading = 0;
-  xPos = 0;
-  zPos = 0;
-}
-
-// s를 따라가며 center point 계산(상대적으로 "현재 위치 기준"으로 재적분)
-function buildRoadMesh(){
-  roadGroup.clear();
-
-  const total = ROAD.backLength + ROAD.length;
-  const steps = Math.floor(total / ROAD.step);
-
-  // 각 프레임마다 “현재 s=0이 내 위치”가 되도록 재적분 (간단하지만 안정)
-  resetRoadIntegrator();
-
-  // road points from -backLength .. +length
-  const pts = [];
-  const banks = [];
-
-  // back 쪽부터 적분: -backLength ~ 0
-  // 구현 단순화를 위해 back도 "앞으로" 만든 다음 나중에 위치를 shift
-  // 즉, 0..total 만들고, 그 중 backLength 이전을 -쪽으로 해석
-  for (let k=0; k<=steps; k++){
-    const s = k * ROAD.step; // 0..total
-    const t = s * 0.035;
-
-    // 저주파 곡률(0 중심)
-    const n = (noise1D(t) - 0.5) * 2.0; // -1..1
-    const n2 = (noise1D(t*0.37 + 40.0) - 0.5) * 2.0;
-
-    let curvature = (n*0.65 + n2*0.35) * ROAD.curvatureLimit;
-
-    // 곡률 클램프(급변 방지)
-    curvature = clamp(curvature, -ROAD.curvatureLimit, ROAD.curvatureLimit);
-
-    // heading 누적
-    heading += curvature * ROAD.step;
-    heading = safe(heading, 0);
-
-    // 전진
-    xPos += Math.sin(heading) * ROAD.step;
-    zPos += Math.cos(heading) * ROAD.step;
-
-    // 뱅킹(커브에 따라 약간)
-    const bank = clamp(curvature * 220.0, -ROAD.bankMax, ROAD.bankMax);
-
-    pts.push(new THREE.Vector3(safe(xPos,0), ROAD.y, safe(zPos,0)));
-    banks.push(bank);
-  }
-
-  // 도로 버텍스 생성
-  const left = [];
-  const right = [];
-  const normals = [];
-  const uvs = [];
-
-  for (let i=0; i<pts.length; i++){
-    const p = pts[i];
-    const pPrev = pts[Math.max(0, i-1)];
-    const pNext = pts[Math.min(pts.length-1, i+1)];
-
-    const forward = new THREE.Vector3().subVectors(pNext, pPrev);
-    forward.y = 0;
-    if (forward.lengthSq() < EPS) forward.set(0,0,1);
-    forward.normalize();
-
-    const side = new THREE.Vector3(-forward.z, 0, forward.x); // left
-    const halfW = ROAD.width * 0.5;
-
-    // banking: 도로면을 살짝 기울여 보이게(시각적)
-    const bank = banks[i];
-    const up = new THREE.Vector3(0,1,0);
-    const bankAxis = forward.clone();
-    const bankQuat = new THREE.Quaternion().setFromAxisAngle(bankAxis, bank);
-    const sideB = side.clone().applyQuaternion(bankQuat);
-    const upB = up.clone().applyQuaternion(bankQuat);
-
-    const l = p.clone().addScaledVector(sideB, +halfW);
-    const r = p.clone().addScaledVector(sideB, -halfW);
-
-    left.push(l);
-    right.push(r);
-    normals.push(upB);
-
-    const v = (i / (pts.length-1)) * 80.0; // 텍스처 반복 느낌
-    uvs.push(new THREE.Vector2(0, v));
-    uvs.push(new THREE.Vector2(1, v));
-  }
-
-  // 인덱스(트라이 스트립 형태)
-  const positions = [];
-  const nor = [];
-  const uv = [];
-  for (let i=0; i<left.length; i++){
-    positions.push(left[i].x, left[i].y, left[i].z);
-    positions.push(right[i].x, right[i].y, right[i].z);
-
-    // 같은 normal
-    nor.push(normals[i].x, normals[i].y, normals[i].z);
-    nor.push(normals[i].x, normals[i].y, normals[i].z);
-
-    uv.push(uvs[i*2].x, uvs[i*2].y);
-    uv.push(uvs[i*2+1].x, uvs[i*2+1].y);
-  }
-
-  const indices = [];
-  for (let i=0; i<left.length-1; i++){
-    const a = i*2;
-    const b = i*2+1;
-    const c = (i+1)*2;
-    const d = (i+1)*2+1;
-    indices.push(a,b,c,  b,d,c);
-  }
-
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute("position", new THREE.Float32BufferAttribute(positions,3));
-  geom.setAttribute("normal", new THREE.Float32BufferAttribute(nor,3));
-  geom.setAttribute("uv", new THREE.Float32BufferAttribute(uv,2));
-  geom.setIndex(indices);
-  geom.computeBoundingSphere();
-
-  const roadMat = new THREE.MeshStandardMaterial({
-    color: 0x1a2134,
-    roughness: 0.92,
-    metalness: 0.02
-  });
-
-  const roadMesh = new THREE.Mesh(geom, roadMat);
-  roadMesh.receiveShadow = true;
-  roadMesh.castShadow = false;
-  roadGroup.add(roadMesh);
-
-  // 중앙선(마킹)
-  const lineGeom = new THREE.BufferGeometry();
-  const linePos = [];
-  for (let i=0; i<pts.length; i++){
-    const p = pts[i];
-    linePos.push(p.x, p.y + 0.01, p.z);
-  }
-  lineGeom.setAttribute("position", new THREE.Float32BufferAttribute(linePos,3));
-  const lineMat = new THREE.LineDashedMaterial({
-    color: 0xf3f7ff,
-    dashSize: 2.2,
-    gapSize: 2.2,
-    transparent: true,
-    opacity: 0.65
-  });
-  const centerLine = new THREE.Line(lineGeom, lineMat);
-  centerLine.computeLineDistances();
-  roadGroup.add(centerLine);
-
-  // 가드레일(간단)
-  const railMat = new THREE.MeshStandardMaterial({ color: 0x3c4663, roughness: 0.85, metalness: 0.15 });
-  const railGeo = new THREE.BoxGeometry(0.25, 0.35, ROAD.step*1.02);
-
-  for (let i=0; i<pts.length-1; i+=2){
-    const p = pts[i];
-    const p2 = pts[i+1];
-    const dir = new THREE.Vector3().subVectors(p2,p);
-    dir.y = 0;
-    const len = dir.length();
-    if (len < EPS) continue;
-    dir.normalize();
-
-    const yaw = Math.atan2(dir.x, dir.z);
-    const forward = new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));
-    const side = new THREE.Vector3(-forward.z,0,forward.x);
-
-    const leftPos = p.clone().addScaledVector(side, ROAD.width*0.55);
-    const rightPos= p.clone().addScaledVector(side,-ROAD.width*0.55);
-
-    const railL = new THREE.Mesh(railGeo, railMat);
-    railL.position.copy(leftPos);
-    railL.position.y += 0.25;
-    railL.rotation.y = yaw;
-    railL.castShadow = true;
-    railL.receiveShadow = true;
-
-    const railR = railL.clone();
-    railR.position.copy(rightPos);
-
-    roadGroup.add(railL, railR);
-  }
-
-  // 도로 전체를 "뒤쪽(-backLength)"가 내 위치 뒤로 가도록 이동
-  // 우리가 플레이어를 원점 주변에 두고 도로를 움직이는 방식
-  // => 여기선 roadGroup을 z방향으로 당겨서, backLength만큼 뒤가 보이게 함
-  // 실제 카메라/차는 월드 원점 근처.
-  // 이 roadMesh는 build시 기준이므로 플레이 중에 그룹을 -progress만큼 이동.
-}
-
-buildRoadMesh();
-
-//
-// =========================
-// 자동차: 서로 다른 로우폴리 모델 8대
-// =========================
+// ===== 자동차 모델 (8대) =====
 //
 function makeCarModel(kind, color=0xffffff){
   const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color, roughness:0.38, metalness:0.18 });
+  const glassMat= new THREE.MeshStandardMaterial({ color:0x9fb8ff, roughness:0.15, metalness:0.05, transparent:true, opacity:0.35 });
+  const darkMat = new THREE.MeshStandardMaterial({ color:0x0e1220, roughness:0.9, metalness:0.05 });
+  const rimMat  = new THREE.MeshStandardMaterial({ color:0x22283a, roughness:0.6, metalness:0.25 });
+  const lightMat= new THREE.MeshStandardMaterial({ color:0xdde6ff, roughness:0.25, metalness:0.0, emissive:0x2a395a, emissiveIntensity:0.7 });
 
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color, roughness: 0.38, metalness: 0.18
-  });
-  const glassMat = new THREE.MeshStandardMaterial({
-    color: 0x9fb8ff, roughness: 0.15, metalness: 0.05,
-    transparent:true, opacity:0.35
-  });
-  const darkMat = new THREE.MeshStandardMaterial({ color: 0x0e1220, roughness: 0.9, metalness: 0.05 });
-  const rimMat  = new THREE.MeshStandardMaterial({ color: 0x22283a, roughness: 0.6, metalness: 0.25 });
-  const lightMat= new THREE.MeshStandardMaterial({ color: 0xdde6ff, roughness: 0.25, metalness: 0.0, emissive:0x2a395a, emissiveIntensity:0.7 });
-
-  // 기본 바퀴
   const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.28, 14);
   function addWheel(x,z){
     const w = new THREE.Mesh(wheelGeo, rimMat);
     w.rotation.z = Math.PI/2;
     w.position.set(x, 0.42, z);
-    w.castShadow = true;
-    w.receiveShadow = true;
+    w.castShadow = true; w.receiveShadow = true;
     g.add(w);
     return w;
   }
 
-  // 종류별 실루엣
-  // 스케일 기준: 길이 z방향, 폭 x방향
   let body, cabin, nose, spoiler;
 
   if (kind === "hatch"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.7, 4.0), bodyMat);
-    body.position.set(0, 0.75, 0);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.65, 1.9), glassMat);
-    cabin.position.set(0, 1.15, -0.25);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.7,4.0), bodyMat); body.position.set(0,0.75,0);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.7,0.65,1.9), glassMat); cabin.position.set(0,1.15,-0.25);
   } else if (kind === "sedan"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.65, 4.4), bodyMat);
-    body.position.set(0, 0.75, 0);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 2.1), glassMat);
-    cabin.position.set(0, 1.12, -0.25);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.35, 1.3), bodyMat);
-    nose.position.set(0, 0.62, 1.65);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.65,4.4), bodyMat); body.position.set(0,0.75,0);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,2.1), glassMat); cabin.position.set(0,1.12,-0.25);
+    nose = new THREE.Mesh(new THREE.BoxGeometry(1.8,0.35,1.3), bodyMat); nose.position.set(0,0.62,1.65);
   } else if (kind === "super"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.55, 4.2), bodyMat);
-    body.position.set(0, 0.65, 0);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.45, 1.7), glassMat);
-    cabin.position.set(0, 0.95, -0.3);
-    spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 0.35), darkMat);
-    spoiler.position.set(0, 1.05, -1.95);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.15,0.55,4.2), bodyMat); body.position.set(0,0.65,0);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.45,1.7), glassMat); cabin.position.set(0,0.95,-0.3);
+    spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.12,0.35), darkMat); spoiler.position.set(0,1.05,-1.95);
   } else if (kind === "hyper"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.52, 4.6), bodyMat);
-    body.position.set(0, 0.62, 0);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.42, 1.6), glassMat);
-    cabin.position.set(0, 0.92, -0.45);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.22, 1.5), bodyMat);
-    nose.position.set(0, 0.58, 2.0);
-    spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.10, 0.55), darkMat);
-    spoiler.position.set(0, 1.02, -2.25);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.25,0.52,4.6), bodyMat); body.position.set(0,0.62,0);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.5,0.42,1.6), glassMat); cabin.position.set(0,0.92,-0.45);
+    nose = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.22,1.5), bodyMat); nose.position.set(0,0.58,2.0);
+    spoiler=new THREE.Mesh(new THREE.BoxGeometry(1.35,0.10,0.55), darkMat); spoiler.position.set(0,1.02,-2.25);
   } else if (kind === "truck"){
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.9, 4.6), bodyMat);
-    body.position.set(0, 0.95, -0.2);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.85, 2.0), glassMat);
-    cabin.position.set(0, 1.45, 0.85);
-    nose = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.45, 1.2), bodyMat);
-    nose.position.set(0, 0.85, 2.25);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.25,0.9,4.6), bodyMat); body.position.set(0,0.95,-0.2);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.9,0.85,2.0), glassMat); cabin.position.set(0,1.45,0.85);
+    nose = new THREE.Mesh(new THREE.BoxGeometry(2.1,0.45,1.2), bodyMat); nose.position.set(0,0.85,2.25);
   } else {
-    body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.65, 4.0), bodyMat);
-    body.position.set(0, 0.75, 0);
-    cabin = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 1.8), glassMat);
-    cabin.position.set(0, 1.1, -0.25);
+    body = new THREE.Mesh(new THREE.BoxGeometry(2.0,0.65,4.0), bodyMat); body.position.set(0,0.75,0);
+    cabin= new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,1.8), glassMat); cabin.position.set(0,1.1,-0.25);
   }
 
-  [body, cabin, nose, spoiler].forEach(m=>{
-    if (!m) return;
-    m.castShadow = true;
-    m.receiveShadow = true;
+  [body,cabin,nose,spoiler].forEach(m=>{
+    if(!m) return;
+    m.castShadow = true; m.receiveShadow = true;
     g.add(m);
   });
 
-  // 라이트
   const headL = new THREE.Mesh(new THREE.BoxGeometry(0.35,0.20,0.10), lightMat);
   headL.position.set(-0.75, 0.72, 2.15);
   const headR = headL.clone(); headR.position.x = +0.75;
   g.add(headL, headR);
 
-  // 바퀴 위치(종류별 약간 변경)
   const wheelZFront = (kind==="truck") ? 1.75 : 1.55;
   const wheelZBack  = (kind==="hyper") ? -1.75 : -1.55;
-  const wheelX = (kind==="truck") ? 1.05 : 0.98;
+  const wheelX      = (kind==="truck") ? 1.05 : 0.98;
 
   const wheels = [
     addWheel(-wheelX, wheelZFront),
@@ -539,7 +257,6 @@ function makeCarModel(kind, color=0xffffff){
     addWheel(+wheelX, wheelZBack),
   ];
 
-  // 하부 섀시
   const skirt = new THREE.Mesh(new THREE.BoxGeometry(2.05,0.22,3.6), darkMat);
   skirt.position.set(0,0.50,0);
   skirt.castShadow = true; skirt.receiveShadow = true;
@@ -549,47 +266,280 @@ function makeCarModel(kind, color=0xffffff){
   return g;
 }
 
-// 사용자 요구 5대 + 추가 3대
 const CAR_PRESETS = [
-  { id:"ioniq5n", name:"Hyundai IONIQ 5 N",  kind:"hatch", color:0x8ad3ff, vmax:150, accel:7.5, brake:11.0, steer:1.10, grip:0.95 },
+  { id:"ioniq5n", name:"Hyundai IONIQ 5 N",  kind:"hatch", color:0x8ad3ff, vmax:150, accel:7.5,  brake:11.0, steer:1.10, grip:0.95 },
   { id:"furai",   name:"Mazda Furai",        kind:"super", color:0xff5a7a, vmax:250, accel:10.0, brake:12.5, steer:1.25, grip:1.05 },
   { id:"huracan", name:"Huracán EVO Spyder", kind:"super", color:0x9cff68, vmax:330, accel:12.5, brake:13.5, steer:1.18, grip:1.08 },
   { id:"agera",   name:"Agera RS",           kind:"hyper", color:0xffd36e, vmax:400, accel:14.0, brake:14.5, steer:1.10, grip:1.02 },
   { id:"devel",   name:"Devel Sixteen",      kind:"hyper", color:0xcaa7ff, vmax:552, accel:18.0, brake:15.0, steer:0.98, grip:0.98 },
-
-  // +a (추가)
   { id:"gt3",     name:"911 GT3-ish",        kind:"sedan", color:0xa6b8ff, vmax:310, accel:12.0, brake:14.0, steer:1.28, grip:1.12 },
   { id:"rally",   name:"Rally Hatch",        kind:"hatch", color:0xffa06e, vmax:220, accel:11.0, brake:12.5, steer:1.35, grip:1.18 },
   { id:"pickup",  name:"Night Pickup",       kind:"truck", color:0x7cffc7, vmax:180, accel:8.8,  brake:12.0, steer:0.95, grip:0.92 },
 ];
 
+function mpsFromKmh(kmh){ return kmh / 3.6; }
+function kmhFromMps(mps){ return mps * 3.6; }
+
 //
-// =========================
-// 차량 물리(아케이드 + 안전장치)
-// - dt clamp
-// - speed clamp
-// - NaN 가드
-// - 카메라/차 분리 방지
-// =========================
+// ===== 무한 도로(청크 재활용) =====
+//
+const ROAD = {
+  width: 10,
+  y: 0.0,
+  step: 2.0,
+  curvatureLimit: 0.010,
+  bankMax: 0.22,
+
+  chunkLength: 60,         // 한 청크 길이(m)
+  chunks: 18,              // 청크 개수
+};
+ROAD.rowsPerChunk = Math.floor(ROAD.chunkLength / ROAD.step) + 1;
+
+let roadSeed = 1337;
+function hash01(n){
+  const x = Math.sin(n * 127.1 + roadSeed * 0.013) * 43758.5453;
+  return x - Math.floor(x);
+}
+function noise1D(t){
+  const i = Math.floor(t);
+  const f = t - i;
+  const a = hash01(i);
+  const b = hash01(i+1);
+  const u = f*f*(3-2*f);
+  return a + (b-a)*u;
+}
+
+// “트랙 앞쪽” 생성용 적분 상태(계속 이어짐)
+const track = {
+  heading: 0,
+  x: 0,
+  z: 0,
+  s: 0, // 누적 거리
+};
+
+function resetTrack(){
+  track.heading = 0;
+  track.x = 0;
+  track.z = 0;
+  track.s = 0;
+}
+
+function advanceTrack(ds){
+  // ds만큼 앞으로 적분해서 새 포인트 반환
+  const sNext = track.s + ds;
+  const t = sNext * 0.035;
+  const n  = (noise1D(t) - 0.5) * 2.0;
+  const n2 = (noise1D(t*0.37 + 40.0) - 0.5) * 2.0;
+
+  let curvature = (n*0.65 + n2*0.35) * ROAD.curvatureLimit;
+  curvature = clamp(curvature, -ROAD.curvatureLimit, ROAD.curvatureLimit);
+
+  track.heading += curvature * ds;
+  track.heading = safe(track.heading, 0);
+
+  track.x += Math.sin(track.heading) * ds;
+  track.z += Math.cos(track.heading) * ds;
+  track.x = safe(track.x, 0);
+  track.z = safe(track.z, 0);
+
+  track.s = sNext;
+
+  const bank = clamp(curvature * 220.0, -ROAD.bankMax, ROAD.bankMax);
+  return {
+    pos: new THREE.Vector3(track.x, ROAD.y, track.z),
+    heading: track.heading,
+    bank,
+    s: track.s
+  };
+}
+
+// 청크 메쉬 생성(동일 topo, 버텍스만 업데이트)
+function makeRoadChunk(){
+  const verts = ROAD.rowsPerChunk * 2;
+  const positions = new Float32Array(verts * 3);
+  const normals   = new Float32Array(verts * 3);
+  const uvs       = new Float32Array(verts * 2);
+
+  const indices = [];
+  for (let i=0; i<ROAD.rowsPerChunk-1; i++){
+    const a = i*2, b = i*2+1, c=(i+1)*2, d=(i+1)*2+1;
+    indices.push(a,b,c, b,d,c);
+  }
+
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute("position", new THREE.BufferAttribute(positions,3));
+  geom.setAttribute("normal",   new THREE.BufferAttribute(normals,3));
+  geom.setAttribute("uv",       new THREE.BufferAttribute(uvs,2));
+  geom.setIndex(indices);
+
+  const roadMat = new THREE.MeshStandardMaterial({
+    color: 0x1a2134, roughness:0.92, metalness:0.02
+  });
+  const roadMesh = new THREE.Mesh(geom, roadMat);
+  roadMesh.receiveShadow = true;
+
+  // 중앙선(라인) - 간단히 positions로 다시 세팅
+  const lineGeom = new THREE.BufferGeometry();
+  const linePos = new Float32Array(ROAD.rowsPerChunk * 3);
+  lineGeom.setAttribute("position", new THREE.BufferAttribute(linePos,3));
+  const lineMat = new THREE.LineDashedMaterial({
+    color: 0xf3f7ff, dashSize: 2.2, gapSize: 2.2, transparent:true, opacity:0.65
+  });
+  const centerLine = new THREE.Line(lineGeom, lineMat);
+
+  const g = new THREE.Group();
+  g.add(roadMesh);
+  g.add(centerLine);
+
+  g.userData = { roadMesh, centerLine };
+  return g;
+}
+
+function updateChunkGeometry(chunk, samples){
+  // samples: [{pos, heading, bank, s} ...] length rowsPerChunk
+  const { roadMesh, centerLine } = chunk.userData;
+  const posAttr = roadMesh.geometry.getAttribute("position");
+  const norAttr = roadMesh.geometry.getAttribute("normal");
+  const uvAttr  = roadMesh.geometry.getAttribute("uv");
+  const lineAttr= centerLine.geometry.getAttribute("position");
+
+  for (let i=0; i<samples.length; i++){
+    const p = samples[i].pos;
+    const yaw = samples[i].heading;
+    const bank = samples[i].bank;
+
+    const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const side = new THREE.Vector3(-forward.z, 0, forward.x);
+    const up = new THREE.Vector3(0,1,0);
+
+    const bankQuat = new THREE.Quaternion().setFromAxisAngle(forward, bank);
+    const sideB = side.clone().applyQuaternion(bankQuat);
+    const upB   = up.clone().applyQuaternion(bankQuat);
+
+    const halfW = ROAD.width * 0.5;
+    const L = p.clone().addScaledVector(sideB, +halfW);
+    const R = p.clone().addScaledVector(sideB, -halfW);
+
+    // positions (L,R)
+    const vi = i*2;
+    posAttr.setXYZ(vi,   L.x, L.y, L.z);
+    posAttr.setXYZ(vi+1, R.x, R.y, R.z);
+
+    norAttr.setXYZ(vi,   upB.x, upB.y, upB.z);
+    norAttr.setXYZ(vi+1, upB.x, upB.y, upB.z);
+
+    const v = (i/(samples.length-1)) * 80.0;
+    uvAttr.setXY(vi,   0, v);
+    uvAttr.setXY(vi+1, 1, v);
+
+    // center line
+    lineAttr.setXYZ(i, p.x, p.y+0.01, p.z);
+  }
+
+  posAttr.needsUpdate = true;
+  norAttr.needsUpdate = true;
+  uvAttr.needsUpdate  = true;
+  roadMesh.geometry.computeBoundingSphere();
+
+  lineAttr.needsUpdate = true;
+  centerLine.computeLineDistances();
+}
+
+// 실제 도로 청크들
+const roadGroup = new THREE.Group();
+scene.add(roadGroup);
+
+const roadChunks = [];
+const chunkSamples = []; // 각 청크의 samples 저장(재생성 시 사용)
+let frontChunkIndex = 0;
+
+// 초기 생성
+function initRoad(){
+  roadGroup.clear();
+  roadChunks.length = 0;
+  chunkSamples.length = 0;
+  frontChunkIndex = 0;
+  resetTrack();
+
+  // “플레이어 시작점”을 (0,0,0)에 맞추기 위해
+  // 첫 포인트는 (0,0,0) 근처로 둔다.
+  // track 상태는 (0,0,0)에서 앞으로 생성.
+  const first = { pos:new THREE.Vector3(0,ROAD.y,0), heading:0, bank:0, s:0 };
+  track.x = 0; track.z = 0; track.heading = 0; track.s = 0;
+
+  let prev = first;
+  for (let c=0; c<ROAD.chunks; c++){
+    const chunk = makeRoadChunk();
+    const samples = [];
+    // 청크 시작은 prev부터
+    samples.push(prev);
+    for (let i=1; i<ROAD.rowsPerChunk; i++){
+      const next = advanceTrack(ROAD.step);
+      samples.push(next);
+      prev = next;
+    }
+
+    updateChunkGeometry(chunk, samples);
+    roadGroup.add(chunk);
+    roadChunks.push(chunk);
+    chunkSamples.push(samples);
+  }
+}
+initRoad();
+
+// “월드 흐름”으로 무한도로 구현: 플레이어는 z=0 근처 유지, 도로가 뒤로 이동.
+// progress는 누적. 일정 길이 지나면 맨 뒤 청크를 앞에 붙이고 재생성.
+let worldProgress = 0;
+let lastRecycleAt = 0;
+
+// 청크 재활용 체크
+function recycleRoadIfNeeded(){
+  const distSince = worldProgress - lastRecycleAt;
+  if (distSince < ROAD.chunkLength) return;
+
+  // 몇 청크를 한 번에 넘었는지 계산
+  const jumps = Math.floor(distSince / ROAD.chunkLength);
+  if (jumps <= 0) return;
+
+  for (let j=0; j<jumps; j++){
+    // 가장 앞 청크를 꺼내서 “맨 뒤”로 재사용
+    const chunk = roadChunks.shift();
+    roadChunks.push(chunk);
+
+    // 새 샘플 생성 (이전 track 상태에서 이어서)
+    const samples = [];
+    const prev = chunkSamples[chunkSamples.length-1][ROAD.rowsPerChunk-1]; // 마지막 청크의 마지막 포인트
+    samples.push(prev);
+    let p = prev;
+    for (let i=1; i<ROAD.rowsPerChunk; i++){
+      const next = advanceTrack(ROAD.step);
+      samples.push(next);
+      p = next;
+    }
+    chunkSamples.shift();
+    chunkSamples.push(samples);
+
+    updateChunkGeometry(chunk, samples);
+  }
+
+  lastRecycleAt += jumps * ROAD.chunkLength;
+}
+
+//
+// ===== 차량 상태(플레이어는 원점 근처) =====
 //
 let carIndex = 0;
-
+let carModel = null;
 const carRoot = new THREE.Group();
 scene.add(carRoot);
 
-let carModel = null;
-
 const carState = {
-  pos: new THREE.Vector3(0, 0.0, 0),
-  vel: new THREE.Vector3(0, 0.0, 0), // x,z만 사용
+  x: 0,      // 차의 좌우 위치만 유지
   yaw: 0,
   yawRate: 0,
-  speed: 0,      // m/s (앞방향)
+  speed: 0,  // m/s (전진)
   steerAngle: 0,
 };
-
-function mpsFromKmh(kmh){ return kmh / 3.6; }
-function kmhFromMps(mps){ return mps * 3.6; }
 
 function loadCar(i){
   carIndex = (i + CAR_PRESETS.length) % CAR_PRESETS.length;
@@ -599,126 +549,70 @@ function loadCar(i){
   carModel = makeCarModel(preset.kind, preset.color);
   carRoot.add(carModel);
 
-  // 초기 상태 리셋
   resetCar();
-
-  // UI
-  const hudCar = document.getElementById("hudCar");
-  hudCar.textContent = preset.name;
-
+  document.getElementById("hudCar").textContent = preset.name;
   updateStatsPanel();
 }
 
 function resetCar(){
-  carState.pos.set(0, 0.0, 0);
-  carState.vel.set(0, 0.0, 0);
+  carState.x = 0;
   carState.yaw = 0;
   carState.yawRate = 0;
   carState.speed = 0;
   carState.steerAngle = 0;
 
-  carRoot.position.copy(carState.pos);
-  carRoot.rotation.set(0, carState.yaw, 0);
+  worldProgress = 0;
+  lastRecycleAt = 0;
 
-  // 도로를 플레이어 기준으로 다시 정렬
-  roadProgress = 0;
-  roadGroup.position.set(0, 0, 0);
+  // 도로/트랙도 초기화
+  initRoad();
 }
 
 //
-// =========================
-// 입력
-// =========================
+// ===== 입력 =====
 //
 const keys = new Set();
-window.addEventListener("keydown", (e)=>{
+window.addEventListener("keydown",(e)=>{
   keys.add(e.code);
   if (e.code === "KeyR") resetCar();
 });
-window.addEventListener("keyup", (e)=> keys.delete(e.code));
-
+window.addEventListener("keyup",(e)=> keys.delete(e.code));
 function keyDown(code){ return keys.has(code); }
 
 //
-// =========================
-// 도로 이동(플레이어는 원점 근처, 도로가 뒤로 흐르는 방식)
-// =========================
+// ===== 조향 확인(네가 물어본 부분) =====
+// 기본은 A=왼쪽, D=오른쪽.
+// 체감이 반대면 invertSteer 체크하면 입력을 뒤집음.
 //
-let roadProgress = 0; // z방향 진행거리 같은 느낌(실제로는 중심선 따라)
-let safeFlag = "OK";
+const invertSteerEl = document.getElementById("invertSteer");
+function steerInputValue(){
+  const left  = keyDown("KeyA") ? 1 : 0;
+  const right = keyDown("KeyD") ? 1 : 0;
 
-//
-// =========================
-// 카메라(차 추적 + 안전장치)
-// - “하늘만 보이는” 문제 방지: pitch/y 제한, 최소/최대 거리, lookAt 보정
-// - 속도가 매우 빨라도 damping으로 추적
-// =========================
-//
-const camState = {
-  pos: new THREE.Vector3(0, 7, 14),
-  look: new THREE.Vector3(0, 1.2, 0),
-};
+  // 기본: right-left (D가 +)
+  let s = (right - left);
 
-function updateCamera(dt, preset){
-  dt = clamp(dt, 0, 0.05);
-
-  const forward = new THREE.Vector3(Math.sin(carState.yaw), 0, Math.cos(carState.yaw));
-  const up = new THREE.Vector3(0,1,0);
-
-  // 속도 기반 거리/높이 가변(너무 빨라도 차가 화면에 남게)
-  const spKmh = kmhFromMps(Math.abs(carState.speed));
-  const dist = clamp(10 + spKmh * 0.03, 10, 26);
-  const height = clamp(5.8 + spKmh * 0.012, 5.8, 10.5);
-
-  // 목표 카메라 위치(차 뒤 위)
-  const targetPos = carState.pos.clone()
-    .addScaledVector(forward, -dist)
-    .addScaledVector(up, height);
-
-  // 목표 시선(차 앞 약간)
-  const targetLook = carState.pos.clone()
-    .addScaledVector(up, 1.25)
-    .addScaledVector(forward, clamp(3 + spKmh*0.01, 3, 9));
-
-  // 부드럽게 추적
-  camState.pos.lerp(targetPos, 1 - Math.exp(-6.0*dt));
-  camState.look.lerp(targetLook, 1 - Math.exp(-8.0*dt));
-
-  // 안전 가드(비정상 수치 방지)
-  camState.pos = vecSafe(camState.pos, new THREE.Vector3(0,7,14));
-  camState.look = vecSafe(camState.look, new THREE.Vector3(0,1.2,0));
-
-  camera.position.copy(camState.pos);
-
-  // 카메라가 땅 아래로 떨어지거나 하늘만 보지 않도록 강제
-  camera.position.y = clamp(camera.position.y, 2.0, 24.0);
-
-  camera.lookAt(camState.look);
-
-  // 너무 급하게 카메라가 뒤집히는 상황 방지(간단한 up 고정)
-  camera.up.set(0,1,0);
+  // 반전 옵션
+  if (invertSteerEl.checked) s = -s;
+  return s;
 }
 
 //
-// =========================
-// 차량 업데이트(안정적인 아케이드)
-// =========================
+// ===== 차량 업데이트 =====
 //
+let safeFlag = "OK";
+
 function updateCar(dt){
   dt = clamp(dt, 0, 0.05);
   const p = CAR_PRESETS[carIndex];
 
-  // 입력
   const throttle = keyDown("KeyW") ? 1 : 0;
   const brake    = keyDown("KeyS") ? 1 : 0;
-  const left     = keyDown("KeyA") ? 1 : 0;
-  const right    = keyDown("KeyD") ? 1 : 0;
   const handbrake= keyDown("Space") ? 1 : 0;
 
-  // 속도(목표)
   const vmax = mpsFromKmh(p.vmax);
-  const accel = p.accel;     // m/s^2 느낌
-  const brakePower = p.brake; // m/s^2 느낌
+  const accel = p.accel;
+  const brakePower = p.brake;
 
   // 저항(속도 커질수록 둔화)
   const drag = 0.020 + Math.abs(carState.speed) * 0.0022;
@@ -728,92 +622,110 @@ function updateCar(dt){
   a += throttle * accel;
   a -= brake * brakePower;
   a -= carState.speed * drag;
-
-  // 핸드브레이크: 그립 저하 + 감속
-  const grip = p.grip * (handbrake ? 0.55 : 1.0);
   if (handbrake) a -= Math.sign(carState.speed) * 3.5;
 
-  // 스피드 적분
   carState.speed += a * dt;
   carState.speed = safe(carState.speed, 0);
 
-  // 최고속 제한(필수: 화면/카메라 오류 방지)
+  // 최고속 클램프(필수)
   carState.speed = clamp(carState.speed, -vmax*0.35, vmax);
 
-  // 조향(속도에 따른 안정화: 빠를수록 덜 꺾임)
-  const steerInput = (right - left);
-  const steerBase = p.steer;
-  const speedFactor = clamp(1.0 - Math.abs(carState.speed) / (vmax + 1e-3), 0.25, 1.0);
-  const steerTarget = steerInput * steerBase * speedFactor;
+  // 조향
+  const steerInput = steerInputValue(); // <- 여기서 A/D 방향 확정
+  const grip = p.grip * (handbrake ? 0.55 : 1.0);
 
-  carState.steerAngle = smoothDamp(carState.steerAngle, steerTarget, 18.0, dt);
+  const speedFactor = clamp(1.0 - Math.abs(carState.speed)/(vmax+1e-3), 0.25, 1.0);
+  const steerTarget = steerInput * p.steer * speedFactor;
 
-  // 요레이트(간단 bicycle 느낌 + 그립)
+  // steerAngle 스무딩
+  const steerLambda = 18.0;
+  const steerT = 1 - Math.exp(-steerLambda*dt);
+  carState.steerAngle = lerp(carState.steerAngle, steerTarget, steerT);
+  carState.steerAngle = safe(carState.steerAngle, 0);
+
+  // yaw rate (아케이드)
   const yawTargetRate = carState.steerAngle * (0.85 + Math.abs(carState.speed)*0.08) * grip;
-  carState.yawRate = smoothDamp(carState.yawRate, yawTargetRate, 10.0, dt);
+  const yawLambda = 10.0;
+  const yawT = 1 - Math.exp(-yawLambda*dt);
+  carState.yawRate = lerp(carState.yawRate, yawTargetRate, yawT);
+  carState.yawRate = safe(carState.yawRate, 0);
 
   carState.yaw += carState.yawRate * dt;
   carState.yaw = safe(carState.yaw, 0);
 
-  // 이동(전진 + 약간의 측면 미끄러짐)
-  const forward = new THREE.Vector3(Math.sin(carState.yaw), 0, Math.cos(carState.yaw));
-  const rightV  = new THREE.Vector3(forward.z, 0, -forward.x);
-
-  // 측면 속도(드리프트 느낌)
+  // 좌우 이동(차가 실제로는 앞으로 안 나가고, world가 뒤로 흐르는 구조)
   const lateral = (handbrake ? 0.55 : 0.22) * (1.0 - grip);
   const sideSlip = lateral * carState.steerAngle * Math.abs(carState.speed);
+  carState.x += sideSlip * dt;
+  carState.x = safe(carState.x, 0);
 
-  const vForward = forward.clone().multiplyScalar(carState.speed);
-  const vSide = rightV.clone().multiplyScalar(sideSlip * 0.9);
-
-  carState.vel.copy(vForward.add(vSide));
-  if (isBad(carState.vel.x) || isBad(carState.vel.z)) carState.vel.set(0,0,0);
-
-  // 위치 적분
-  carState.pos.addScaledVector(carState.vel, dt);
-  carState.pos = vecSafe(carState.pos, new THREE.Vector3());
-
-  // 차가 도로에서 너무 벗어나면 완만히 되돌림(오류/시야 이탈 방지)
+  // 차가 도로를 벗어나지 않도록 제한
   const maxOff = ROAD.width * 0.62;
-  carState.pos.x = clamp(carState.pos.x, -maxOff, +maxOff);
+  carState.x = clamp(carState.x, -maxOff, +maxOff);
 
-  // y는 고정(추후 경사/점프 넣을 수 있음)
-  carState.pos.y = 0.0;
+  // 월드 진행(앞으로 간 만큼 도로를 뒤로)
+  worldProgress += Math.max(0, carState.speed) * dt;
+  worldProgress = safe(worldProgress, 0);
 
-  // 모델 반영
-  carRoot.position.copy(carState.pos);
+  // 도로 그룹을 진행만큼 뒤로(플레이어는 z=0 유지)
+  roadGroup.position.z = -worldProgress;
+  roadGroup.position.x = -carState.x * 0.35;
+
+  // 청크 재활용
+  recycleRoadIfNeeded();
+
+  // 차 모델 적용 (차는 원점 부근)
+  carRoot.position.set(carState.x, 0.0, 0.0);
   carRoot.rotation.y = carState.yaw;
 
-  // 바퀴 회전(속도 기반)
+  // 바퀴 회전
   const wheels = carModel?.userData?.wheels || [];
   const wheelSpin = carState.speed * dt * 2.25;
   wheels.forEach((w, idx)=>{
     w.rotation.x += wheelSpin;
-    // 앞바퀴 조향 표현(대충)
     if (idx < 2) w.rotation.y = carState.steerAngle * 0.25;
   });
 
-  // 도로 흐름: 플레이어 z를 기준으로 도로를 뒤로 이동
-  // 여기선 플레이어가 실제로 움직이지만, 시각적으로 도로도 살짝 상쇄 이동하면 "무한도로" 느낌이 안정적
-  // 간단히 z만 사용해서 흐르는 느낌 만들기:
-  roadProgress += Math.max(0, carState.speed) * dt;
-  roadProgress = safe(roadProgress, 0);
-
-  // 도로 그룹을 내 진행만큼 뒤로 보내서 계속 앞으로 달리는 느낌 강화
-  // (x는 플레이어의 x를 약간 상쇄하여 중앙 유지)
-  roadGroup.position.z = -roadProgress;
-  roadGroup.position.x = -carState.pos.x * 0.35;
-
-  // 안전 상태 표시
+  // 안전 플래그
   safeFlag = "OK";
+  if (isBad(carState.speed) || isBad(carState.x) || isBad(worldProgress)) safeFlag = "GUARD";
   if (Math.abs(kmhFromMps(carState.speed)) > p.vmax*1.01) safeFlag = "CLAMP";
-  if (isBad(carState.speed) || isBad(carState.pos.x) || isBad(carState.pos.z)) safeFlag = "GUARD";
 }
 
 //
-// =========================
-// UI 연결
-// =========================
+// ===== 카메라(차 절대 안 놓치게) =====
+//
+const camState = { pos: new THREE.Vector3(0,7,14), look: new THREE.Vector3(0,1.2,0) };
+
+function updateCamera(dt){
+  dt = clamp(dt, 0, 0.05);
+  const spKmh = kmhFromMps(Math.abs(carState.speed));
+
+  const forward = new THREE.Vector3(Math.sin(carState.yaw), 0, Math.cos(carState.yaw));
+  const up = new THREE.Vector3(0,1,0);
+
+  const dist = clamp(10 + spKmh*0.03, 10, 26);
+  const height = clamp(5.8 + spKmh*0.012, 5.8, 10.5);
+
+  const carPos = new THREE.Vector3(carState.x, 0, 0);
+
+  const targetPos = carPos.clone().addScaledVector(forward, -dist).addScaledVector(up, height);
+  const targetLook= carPos.clone().addScaledVector(up, 1.25).addScaledVector(forward, clamp(3+spKmh*0.01, 3, 9));
+
+  expLerpVec(camState.pos, targetPos, 6.0, dt);
+  expLerpVec(camState.look, targetLook, 8.0, dt);
+
+  camState.pos = vecSafe(camState.pos, new THREE.Vector3(0,7,14));
+  camState.look= vecSafe(camState.look,new THREE.Vector3(0,1.2,0));
+
+  camera.position.copy(camState.pos);
+  camera.position.y = clamp(camera.position.y, 2.0, 24.0);
+  camera.up.set(0,1,0);
+  camera.lookAt(camState.look);
+}
+
+//
+// ===== UI =====
 //
 const carSelect = document.getElementById("carSelect");
 CAR_PRESETS.forEach((c, idx)=>{
@@ -822,10 +734,7 @@ CAR_PRESETS.forEach((c, idx)=>{
   opt.textContent = c.name;
   carSelect.appendChild(opt);
 });
-carSelect.addEventListener("change", ()=>{
-  loadCar(parseInt(carSelect.value,10)||0);
-});
-
+carSelect.addEventListener("change", ()=> loadCar(parseInt(carSelect.value,10)||0));
 document.getElementById("resetBtn").addEventListener("click", resetCar);
 
 let paused = false;
@@ -836,34 +745,32 @@ document.getElementById("pauseBtn").addEventListener("click", ()=>{
 
 function updateStatsPanel(){
   const p = CAR_PRESETS[carIndex];
-  const el = document.getElementById("stats");
-  el.innerHTML = `
+  document.getElementById("stats").innerHTML = `
     <div><b>성능</b></div>
     <div>최고속: ${p.vmax} km/h</div>
     <div>가속: ${p.accel.toFixed(1)} / 브레이크: ${p.brake.toFixed(1)}</div>
     <div>핸들링: ${p.steer.toFixed(2)} / 그립: ${p.grip.toFixed(2)}</div>
-    <div class="muted" style="margin-top:6px;">※ 속도/카메라/NaN 안전장치가 기본 내장되어 있어요.</div>
+    <div class="muted" style="margin-top:6px;">무한 도로 + NaN/카메라 안전장치 내장</div>
   `;
 }
 
 const hudSpeed = document.getElementById("hudSpeed");
 const hudSafe  = document.getElementById("hudSafe");
-const hudGear  = document.getElementById("hudGear");
+const hudSteer = document.getElementById("hudSteer");
+
+invertSteerEl.addEventListener("change", ()=>{
+  hudSteer.textContent = invertSteerEl.checked ? "A=→ / D=←" : "A=← / D=→";
+});
 
 //
-// =========================
-// 리사이즈(visualViewport 안전 접근)
-// =========================
+// ===== 리사이즈 =====
 //
 const vv = window.visualViewport;
 function doResize(){
   const w = Math.floor(vv?.width ?? window.innerWidth);
   const h = Math.floor(vv?.height ?? window.innerHeight);
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-
-  renderer.setPixelRatio(dpr);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
   renderer.setSize(w, h, true);
-
   camera.aspect = w/h;
   camera.updateProjectionMatrix();
 }
@@ -872,31 +779,24 @@ vv?.addEventListener("resize", doResize, {passive:true});
 doResize();
 
 //
-// =========================
-// 메인 루프
-// =========================
+// ===== 루프 =====
 //
 let last = performance.now();
-
 loadCar(0);
 carSelect.value = "0";
+hudSteer.textContent = "A=← / D=→";
 
 function tick(now){
-  const rawDt = (now - last) / 1000;
-  last = now;
-
-  // dt 안전 클램프(탭 전환/렉/프레임 드랍 시 폭주 방지)
+  const rawDt = (now-last)/1000; last = now;
   const dt = clamp(rawDt, 0, 0.05);
 
   if (!paused){
     updateCar(dt);
-    updateCamera(dt, CAR_PRESETS[carIndex]);
+    updateCamera(dt);
   }
 
-  // HUD
-  hudSpeed.textContent = Math.round(Math.abs(kmhFromMps(carState.speed))).toString();
+  hudSpeed.textContent = String(Math.round(Math.abs(kmhFromMps(carState.speed))));
   hudSafe.textContent = safeFlag;
-  hudGear.textContent = (carState.speed >= -0.2) ? "D" : "R";
 
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
