@@ -3,19 +3,30 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Slow Roads 3D - Mini</title>
+  <title>Slow Drive 3D (Curves + Car Select)</title>
   <style>
     html,body{height:100%;margin:0;overflow:hidden;background:#060812;font-family:system-ui,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+    canvas{display:block}
     #ui{
       position:fixed;left:14px;top:14px;z-index:10;
       color:#eaf0ff;background:rgba(10,14,26,.55);
       border:1px solid rgba(255,255,255,.10);
       padding:10px 12px;border-radius:14px;backdrop-filter: blur(10px);
       box-shadow:0 12px 32px rgba(0,0,0,.35); user-select:none;
-      max-width:min(520px, calc(100vw - 28px));
+      max-width:min(620px, calc(100vw - 28px));
     }
     .t{font-weight:900;letter-spacing:-.2px}
-    .s{color:rgba(234,240,255,.78);font-size:13px;margin-top:4px;line-height:1.35}
+    .s{color:rgba(234,240,255,.78);font-size:13px;margin-top:6px;line-height:1.35}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+    label{font-size:12px;color:rgba(234,240,255,.75)}
+    select{
+      appearance:none;
+      padding:8px 10px;border-radius:12px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.06);
+      color:#eaf0ff;
+      outline:none;
+    }
     .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:2px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06)}
     #hud{
       position:fixed;right:14px;top:14px;z-index:10;
@@ -23,7 +34,7 @@
       border:1px solid rgba(255,255,255,.10);
       padding:10px 12px;border-radius:14px;backdrop-filter: blur(10px);
       box-shadow:0 12px 32px rgba(0,0,0,.35); user-select:none;
-      text-align:right; min-width:170px;
+      text-align:right; min-width:190px;
     }
     #hud .big{font-weight:950;font-size:18px}
     #hud .small{color:rgba(234,240,255,.72);font-size:12px;margin-top:2px}
@@ -35,16 +46,15 @@
       box-shadow:0 12px 32px rgba(0,0,0,.35);
       font-size:13px; user-select:none; pointer-events:none;
       opacity:0; transition:opacity .25s ease, transform .25s ease;
-      max-width:min(620px, calc(100vw - 28px));
+      max-width:min(720px, calc(100vw - 28px));
       text-align:center; line-height:1.35;
     }
     #hint.on{opacity:1; transform:translateX(-50%) translateY(-4px);}
-    canvas{display:block}
   </style>
 </head>
 <body>
   <div id="ui">
-    <div class="t">Slow Roads 3D - Mini</div>
+    <div class="t">Slow Drive 3D (Curves + Car Select)</div>
     <div class="s">
       <span class="kbd">W</span>/<span class="kbd">S</span> 가속/감속 ·
       <span class="kbd">A</span>/<span class="kbd">D</span> 조향 ·
@@ -53,24 +63,29 @@
       <span class="kbd">T</span> 낮/밤 ·
       <span class="kbd">R</span> 리셋
     </div>
-    <div class="s">팁: 커브는 자동으로 생성돼. 너무 바깥으로 나가면 살짝 미끄러져서 복귀해.</div>
+
+    <div class="row">
+      <label for="carSel">차 선택</label>
+      <select id="carSel"></select>
+      <span id="carSpec" style="font-size:12px;color:rgba(234,240,255,.75)"></span>
+    </div>
   </div>
 
   <div id="hud">
     <div class="big" id="spd">0 km/h</div>
     <div class="small" id="dst">0.0 km</div>
     <div class="small" id="mode">DAY · FOG: OFF</div>
+    <div class="small" id="carName">CAR: -</div>
   </div>
 
   <div id="hint"></div>
 
-  <!-- Three.js (CDN) -->
   <script type="module">
     import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
 
-    // ===== Utils =====
+    // ===== helpers =====
     const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
-    const lerp  = (a,b,t)=>a+(b-a)*t;
+    const lerp = (a,b,t)=>a+(b-a)*t;
 
     function toast(msg){
       const el = document.getElementById('hint');
@@ -80,7 +95,7 @@
       toast._t = setTimeout(()=>el.classList.remove('on'), 900);
     }
 
-    // ===== Renderer / Scene / Camera =====
+    // ===== renderer / scene / camera =====
     const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.setSize(innerWidth, innerHeight);
@@ -88,9 +103,9 @@
     document.body.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 1500);
+    const camera = new THREE.PerspectiveCamera(65, innerWidth/innerHeight, 0.1, 2200);
 
-    // ===== Lighting & Atmosphere (Day/Night) =====
+    // ===== environment =====
     let isNight = false;
     let fogOn = false;
 
@@ -98,24 +113,25 @@
     scene.add(hemi);
 
     const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(50, 120, 40);
-    sun.castShadow = false;
+    sun.position.set(60, 140, 50);
     scene.add(sun);
 
-    // Stars (night)
+    // stars
     const starGeo = new THREE.BufferGeometry();
-    const starCount = 1200;
+    const starCount = 1400;
     const starPos = new Float32Array(starCount * 3);
     for(let i=0;i<starCount;i++){
-      const r = 600 + Math.random()*600;
+      const r = 700 + Math.random()*900;
       const th = Math.random()*Math.PI*2;
-      const ph = Math.random()*Math.PI*0.45; // upper-ish
+      const ph = Math.random()*Math.PI*0.45;
       starPos[i*3+0] = Math.cos(th)*Math.sin(ph)*r;
       starPos[i*3+1] = 200 + Math.cos(ph)*r*0.15;
       starPos[i*3+2] = Math.sin(th)*Math.sin(ph)*r;
     }
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-    const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({ color:0xffffff, size:1.2, sizeAttenuation:true, transparent:true, opacity:0.0 }));
+    const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+      color:0xffffff, size:1.15, sizeAttenuation:true, transparent:true, opacity:0.0
+    }));
     scene.add(stars);
 
     function applyEnv(){
@@ -132,53 +148,218 @@
         sun.color.setHex(0xaac6ff);
         stars.material.opacity = 0.9;
       }
-      if(fogOn){
-        scene.fog = new THREE.Fog(isNight ? 0x050611 : 0x9fc7ff, 40, 260);
-      }else{
-        scene.fog = null;
-      }
+      scene.fog = fogOn ? new THREE.Fog(isNight ? 0x050611 : 0x9fc7ff, 60, 420) : null;
       document.getElementById('mode').textContent = `${isNight ? "NIGHT" : "DAY"} · FOG: ${fogOn ? "ON" : "OFF"}`;
     }
     applyEnv();
 
-    // ===== Road settings =====
+    // ===== car profiles =====
+    // topSpeed in km/h (as you provided). accelTier -> acceleration feel.
+    const CAR_PROFILES = [
+      { id:"ioniq5n", name:"현대 아이오닉 5 N", topSpeed:150, accelTier:"하", accelMul:0.70, color:0x3dd6ff },
+      { id:"furai",   name:"Mazda Furai",        topSpeed:250, accelTier:"중", accelMul:0.95, color:0xff5f2e },
+      { id:"huracan", name:"우라칸 에보 스파이더", topSpeed:330, accelTier:"중상", accelMul:1.10, color:0x2dd4bf },
+      { id:"agera",   name:"아제라 RS",         topSpeed:400, accelTier:"상", accelMul:1.28, color:0x7c5cff },
+      { id:"devel",   name:"데벨 식스틴",        topSpeed:552, accelTier:"최상", accelMul:1.55, color:0xffd166 },
+    ];
+
+    // UI select
+    const sel = document.getElementById('carSel');
+    CAR_PROFILES.forEach((c, idx)=>{
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${idx+1}. ${c.name}`;
+      sel.appendChild(opt);
+    });
+
+    // ===== Car model builder (improved silhouettes) =====
+    function buildCar(profile){
+      const g = new THREE.Group();
+
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: profile.color,
+        roughness: 0.35,
+        metalness: 0.15,
+        emissive: 0x000000
+      });
+      const glassMat = new THREE.MeshStandardMaterial({
+        color: 0x11162a,
+        roughness: 0.18,
+        metalness: 0.0
+      });
+      const darkMat = new THREE.MeshStandardMaterial({ color:0x0f1220, roughness:0.9, metalness:0.0 });
+
+      // wheels
+      const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 14);
+      wheelGeo.rotateZ(Math.PI/2);
+      function wheel(x,y,z){
+        const w = new THREE.Mesh(wheelGeo, darkMat);
+        w.position.set(x,y,z);
+        g.add(w);
+        return w;
+      }
+      const wheels = [];
+
+      // headlights
+      const headL = new THREE.SpotLight(0xdde9ff, 0.0, 75, Math.PI/9, 0.55, 1.0);
+      headL.position.set(-0.55, 0.65, 1.75);
+      headL.target.position.set(-0.55, 0.2, 26);
+      g.add(headL); g.add(headL.target);
+
+      const headR = headL.clone();
+      headR.position.x = 0.55;
+      headR.target.position.x = 0.55;
+      g.add(headR); g.add(headR.target);
+
+      // A little underglow at night
+      const under = new THREE.PointLight(profile.color, 0.0, 6);
+      under.position.set(0, 0.2, 0);
+      g.add(under);
+
+      // Profile-specific geometry
+      // (All are still "low poly", but distinct)
+      if(profile.id === "ioniq5n"){
+        // Boxy SUV-ish hatch
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.55, 3.8), bodyMat);
+        base.position.set(0, 0.55, 0);
+        g.add(base);
+
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 1.9), bodyMat);
+        roof.position.set(0, 1.0, -0.25);
+        g.add(roof);
+
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.42, 1.55), glassMat);
+        glass.position.set(0, 1.05, -0.25);
+        g.add(glass);
+
+        // small spoiler
+        const spoiler = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.12, 0.45), darkMat);
+        spoiler.position.set(0, 1.12, -1.65);
+        g.add(spoiler);
+
+        wheels.push(wheel(-0.85, 0.30, 1.35), wheel(0.85, 0.30, 1.35), wheel(-0.85, 0.30, -1.35), wheel(0.85, 0.30, -1.35));
+      }
+      else if(profile.id === "furai"){
+        // Concept racer: long nose + fin
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.42, 3.6), bodyMat);
+        base.position.set(0, 0.48, 0);
+        g.add(base);
+
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.25, 10), bodyMat);
+        nose.rotation.x = Math.PI/2;
+        nose.position.set(0, 0.48, 2.1);
+        g.add(nose);
+
+        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.42, 1.3), glassMat);
+        canopy.position.set(0, 0.82, 0.2);
+        g.add(canopy);
+
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.55, 1.2), darkMat);
+        fin.position.set(0, 1.05, -0.65);
+        g.add(fin);
+
+        wheels.push(wheel(-0.80, 0.26, 1.25), wheel(0.80, 0.26, 1.25), wheel(-0.80, 0.26, -1.25), wheel(0.80, 0.26, -1.25));
+      }
+      else if(profile.id === "huracan"){
+        // Low wedge + open top vibe
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.38, 3.35), bodyMat);
+        base.position.set(0, 0.44, 0);
+        g.add(base);
+
+        const hood = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.22, 1.4), bodyMat);
+        hood.position.set(0, 0.62, 1.05);
+        g.add(hood);
+
+        const cockpit = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.35, 1.0), glassMat);
+        cockpit.position.set(0, 0.80, -0.05);
+        g.add(cockpit);
+
+        // rear deck
+        const rear = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.22, 1.2), darkMat);
+        rear.position.set(0, 0.62, -1.15);
+        g.add(rear);
+
+        wheels.push(wheel(-0.86, 0.25, 1.15), wheel(0.86, 0.25, 1.15), wheel(-0.86, 0.25, -1.15), wheel(0.86, 0.25, -1.15));
+      }
+      else if(profile.id === "agera"){
+        // Hypercar: longer, sharper rear wing
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.38, 3.75), bodyMat);
+        base.position.set(0, 0.44, 0);
+        g.add(base);
+
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.70, 1.15, 12), bodyMat);
+        nose.rotation.x = Math.PI/2;
+        nose.position.set(0, 0.44, 2.35);
+        g.add(nose);
+
+        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.40, 1.25), glassMat);
+        canopy.position.set(0, 0.82, 0.25);
+        g.add(canopy);
+
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.10, 0.55), darkMat);
+        wing.position.set(0, 0.98, -1.85);
+        g.add(wing);
+
+        const wingSt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.35, 0.12), darkMat);
+        const stL = wingSt.clone(); stL.position.set(-0.75, 0.83, -1.70);
+        const stR = wingSt.clone(); stR.position.set(0.75, 0.83, -1.70);
+        g.add(stL); g.add(stR);
+
+        wheels.push(wheel(-0.86, 0.25, 1.35), wheel(0.86, 0.25, 1.35), wheel(-0.86, 0.25, -1.35), wheel(0.86, 0.25, -1.35));
+      }
+      else {
+        // Devel Sixteen: exaggerated long+wide with huge rear
+        const base = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.42, 4.35), bodyMat);
+        base.position.set(0, 0.48, 0);
+        g.add(base);
+
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.55, 14), bodyMat);
+        nose.rotation.x = Math.PI/2;
+        nose.position.set(0, 0.48, 2.85);
+        g.add(nose);
+
+        const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.45, 1.35), glassMat);
+        canopy.position.set(0, 0.86, 0.15);
+        g.add(canopy);
+
+        const rearBlock = new THREE.Mesh(new THREE.BoxGeometry(2.00, 0.28, 1.25), darkMat);
+        rearBlock.position.set(0, 0.62, -2.05);
+        g.add(rearBlock);
+
+        wheels.push(wheel(-0.95, 0.26, 1.55), wheel(0.95, 0.26, 1.55), wheel(-0.95, 0.26, -1.55), wheel(0.95, 0.26, -1.55));
+      }
+
+      // store refs
+      g.userData.wheels = wheels;
+      g.userData.headL = headL;
+      g.userData.headR = headR;
+      g.userData.under = under;
+
+      return g;
+    }
+
+    // ===== road system (smooth curves) =====
+    // We generate a forward "centerline" as a sequence of points with continuously varying curvature.
     const ROAD_WIDTH = 10;
-    const ROAD_LEN = 60;          // per segment length (z)
-    const SEG_COUNT = 26;         // number of visible segments
-    const RECYCLE_Z = ROAD_LEN * SEG_COUNT;
+    const SEG_LEN = 18;          // shorter segments -> smoother visuals
+    const SEG_COUNT = 90;        // more segments -> longer view
+    const LOOK_AHEAD = SEG_LEN * SEG_COUNT;
 
-    // The road is made of repeating segments. Each segment has an x-offset and yaw to make curves.
-    const segments = [];
-
-    // Materials
+    // road meshes (reused)
     const matRoad = new THREE.MeshStandardMaterial({ color:0x2b2f3a, roughness:0.95, metalness:0.0 });
     const matShoulder = new THREE.MeshStandardMaterial({ color:0x1b1e26, roughness:1.0, metalness:0.0 });
-    const matLine = new THREE.MeshStandardMaterial({ color:0xe7ecff, roughness:0.35, metalness:0.0, emissive:0x0, emissiveIntensity:0.0 });
+    const matLine = new THREE.MeshStandardMaterial({ color:0xe7ecff, roughness:0.35, metalness:0.0 });
 
-    // Geometry
-    const geoRoad = new THREE.PlaneGeometry(ROAD_WIDTH, ROAD_LEN, 1, 1);
+    const geoRoad = new THREE.PlaneGeometry(ROAD_WIDTH, SEG_LEN, 1, 1);
     geoRoad.rotateX(-Math.PI/2);
 
-    const geoShoulder = new THREE.PlaneGeometry(ROAD_WIDTH*2.2, ROAD_LEN, 1, 1);
+    const geoShoulder = new THREE.PlaneGeometry(ROAD_WIDTH*2.25, SEG_LEN, 1, 1);
     geoShoulder.rotateX(-Math.PI/2);
 
-    const geoLine = new THREE.PlaneGeometry(0.18, ROAD_LEN*0.7, 1, 1);
+    const geoLine = new THREE.PlaneGeometry(0.18, SEG_LEN*0.72, 1, 1);
     geoLine.rotateX(-Math.PI/2);
 
-    // Procedural curve generator (smoothly varying)
-    let curvePhase = 0;
-    let curveTarget = 0;
-    let curveCurrent = 0;
-
-    function nextCurveTarget(){
-      // Small random curve with occasional stronger bends
-      const base = (Math.random()*2-1) * 0.055;
-      const spice = (Math.random()<0.18) ? (Math.random()*2-1) * 0.10 : 0;
-      curveTarget = clamp(base + spice, -0.12, 0.12);
-    }
-    nextCurveTarget();
-
-    function buildSegment(zIndex){
+    function makeRoadSegment(){
       const g = new THREE.Group();
 
       const shoulder = new THREE.Mesh(geoShoulder, matShoulder);
@@ -189,35 +370,66 @@
       road.position.y = 0.01;
       g.add(road);
 
-      // Center dashed line
       const dash = new THREE.Mesh(geoLine, matLine);
-      dash.position.y = 0.02;
-      dash.position.x = 0;
+      dash.position.set(0, 0.02, 0);
       g.add(dash);
 
-      // Side lines
       const sideL = new THREE.Mesh(geoLine, matLine);
       sideL.scale.x = 0.9;
-      sideL.position.y = 0.02;
-      sideL.position.x = -ROAD_WIDTH/2 + 0.35;
+      sideL.position.set(-ROAD_WIDTH/2 + 0.35, 0.02, 0);
       g.add(sideL);
 
       const sideR = sideL.clone();
       sideR.position.x = ROAD_WIDTH/2 - 0.35;
       g.add(sideR);
 
-      // Place initial z
-      g.position.z = -zIndex * ROAD_LEN;
       scene.add(g);
-
-      return { group:g, zIndex, xOff:0, yaw:0 };
+      return g;
     }
 
-    for(let i=0;i<SEG_COUNT;i++){
-      segments.push(buildSegment(i));
-    }
+    const roadSeg = Array.from({length: SEG_COUNT}, makeRoadSegment);
 
-    // ===== Simple scenery (trees + mountains) =====
+    // Smooth curvature generator (very low-frequency noise)
+    let k = 0;           // curvature (rad per meter-ish, stylized)
+    let kTarget = 0;
+    let kPhase = 0;
+
+    function pickKTarget(){
+      // gentle most of time, occasional stronger curve
+      const base = (Math.random()*2-1) * 0.0020;             // gentle
+      const spice = (Math.random()<0.20) ? (Math.random()*2-1) * 0.0032 : 0; // sometimes
+      kTarget = clamp(base + spice, -0.0042, 0.0042);
+    }
+    pickKTarget();
+
+    // Centerline buffers
+    const centers = [];   // THREE.Vector3 points along forward direction
+    const headings = [];  // yaw angle at each point
+
+    function initCenterline(){
+      centers.length = 0;
+      headings.length = 0;
+
+      // start facing "forward" in -Z (we'll move world towards camera, but keep model coherent)
+      let pos = new THREE.Vector3(0, 0, 0);
+      let yaw = 0; // yaw around Y, 0 means heading toward -Z in our placement scheme
+      centers.push(pos.clone());
+      headings.push(yaw);
+
+      for(let i=1;i<=SEG_COUNT;i++){
+        // step forward by SEG_LEN
+        const dir = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw));
+        pos = pos.clone().addScaledVector(dir, SEG_LEN);
+        centers.push(pos);
+        headings.push(yaw);
+      }
+    }
+    initCenterline();
+
+    // "progress within first segment"
+    let segT = 0; // meters progressed inside segment [0..SEG_LEN)
+
+    // ===== scenery (recycle with distance along centerline) =====
     const scenery = new THREE.Group();
     scene.add(scenery);
 
@@ -227,261 +439,343 @@
 
     const treeGeoTop = new THREE.ConeGeometry(1.2, 3.5, 7);
     const treeGeoTrk = new THREE.CylinderGeometry(0.25, 0.35, 1.6, 6);
-
     const hillGeo = new THREE.SphereGeometry(10, 10, 8);
 
-    const deco = []; // objects with baseZ for recycling
-
-    function addTree(x, z, s=1){
+    const deco = [];
+    function addTree(sIndex, side){
       const t = new THREE.Group();
+      const s = 0.7 + Math.random()*0.9;
       const trunk = new THREE.Mesh(treeGeoTrk, treeMatTrk);
-      trunk.position.y = 0.8*s;
-      trunk.scale.setScalar(s);
+      trunk.position.y = 0.8*s; trunk.scale.setScalar(s);
       t.add(trunk);
       const top = new THREE.Mesh(treeGeoTop, treeMatTop);
-      top.position.y = 3.1*s;
-      top.scale.setScalar(s);
+      top.position.y = 3.1*s; top.scale.setScalar(s);
       t.add(top);
-      t.position.set(x, 0, z);
       scenery.add(t);
-      deco.push({ obj:t, kind:"tree" });
+      deco.push({ obj:t, kind:"tree", sIndex, side, xOff: (ROAD_WIDTH*0.9 + 6 + Math.random()*26) * side });
     }
-
-    function addHill(x, z, s=1){
+    function addHill(sIndex, side){
       const h = new THREE.Mesh(hillGeo, hillMat);
+      const s = 0.9 + Math.random()*1.8;
       h.scale.set(1.7*s, 0.7*s, 1.2*s);
-      h.position.set(x, 4*s, z);
       scenery.add(h);
-      deco.push({ obj:h, kind:"hill" });
+      deco.push({ obj:h, kind:"hill", sIndex, side, xOff: (ROAD_WIDTH*0.9 + 28 + Math.random()*70) * side, y: 4*s });
     }
+    // seed
+    for(let i=0;i<140;i++) addTree(10 + Math.floor(Math.random()*(SEG_COUNT-20)), Math.random()<0.5?-1:1);
+    for(let i=0;i<34;i++) addHill(12 + Math.floor(Math.random()*(SEG_COUNT-24)), Math.random()<0.5?-1:1);
 
-    function seedScenery(){
-      for(let i=0;i<140;i++){
-        const z = -Math.random()*RECYCLE_Z;
-        const side = Math.random()<0.5 ? -1 : 1;
-        const x = side*(ROAD_WIDTH*0.9 + 6 + Math.random()*26);
-        addTree(x, z, 0.7 + Math.random()*0.9);
-      }
-      for(let i=0;i<36;i++){
-        const z = -Math.random()*RECYCLE_Z;
-        const side = Math.random()<0.5 ? -1 : 1;
-        const x = side*(ROAD_WIDTH*0.9 + 28 + Math.random()*70);
-        addHill(x, z, 0.9 + Math.random()*1.8);
-      }
-    }
-    seedScenery();
+    // ===== player state =====
+    const keys = new Set();
 
-    // ===== Player (a simple car) =====
-    const car = new THREE.Group();
-    scene.add(car);
-
-    const carBody = new THREE.Mesh(
-      new THREE.BoxGeometry(1.6, 0.5, 3.2),
-      new THREE.MeshStandardMaterial({ color:0x7c5cff, roughness:0.35, metalness:0.1, emissive:0x0 })
-    );
-    carBody.position.y = 0.55;
-    car.add(carBody);
-
-    const carCabin = new THREE.Mesh(
-      new THREE.BoxGeometry(1.2, 0.5, 1.3),
-      new THREE.MeshStandardMaterial({ color:0x14192b, roughness:0.25, metalness:0.0 })
-    );
-    carCabin.position.set(0, 0.9, -0.3);
-    car.add(carCabin);
-
-    // Headlights for night
-    const headL = new THREE.SpotLight(0xdde9ff, 0.0, 60, Math.PI/8, 0.55, 1.0);
-    headL.position.set(-0.55, 0.8, 1.4);
-    headL.target.position.set(-0.55, 0.2, 20);
-    car.add(headL);
-    car.add(headL.target);
-
-    const headR = headL.clone();
-    headR.position.x = 0.55;
-    headR.target.position.x = 0.55;
-    car.add(headR);
-    car.add(headR.target);
-
-    // Car state
     const state = {
-      speed: 0,        // m/s-ish
+      speed: 0,        // m/s
       dist: 0,         // meters
-      x: 0,            // lateral position
-      xVel: 0,
-      laneMax: ROAD_WIDTH/2 - 1.0,
-      zScroll: 0
+      laneX: 0,        // lateral offset relative to centerline
+      laneV: 0
     };
 
-    // ===== Controls =====
-    const keys = new Set();
+    // car config in effect
+    let currentCar = CAR_PROFILES[0];
+    let car = buildCar(currentCar);
+    scene.add(car);
+
+    function applyCarProfile(p){
+      currentCar = p;
+
+      // swap model
+      scene.remove(car);
+      car = buildCar(currentCar);
+      scene.add(car);
+
+      // update UI
+      document.getElementById('carName').textContent = `CAR: ${p.name}`;
+      document.getElementById('carSpec').textContent = `최고속도 ${p.topSpeed} km/h · 가속 ${p.accelTier}`;
+      toast(`${p.name} 선택됨`);
+    }
+
+    // init selection
+    sel.value = CAR_PROFILES[0].id;
+    applyCarProfile(CAR_PROFILES[0]);
+
+    sel.addEventListener('change', ()=>{
+      const p = CAR_PROFILES.find(x=>x.id===sel.value) || CAR_PROFILES[0];
+      applyCarProfile(p);
+      // reset speed a bit so change feels sane
+      state.speed = Math.min(state.speed, (p.topSpeed/3.6) * 0.55);
+    });
+
     addEventListener('keydown', (e)=>{
       keys.add(e.code);
 
       if(e.code === "KeyF"){ fogOn = !fogOn; applyEnv(); toast(`FOG ${fogOn ? "ON" : "OFF"}`); }
       if(e.code === "KeyT"){ isNight = !isNight; applyEnv(); toast(isNight ? "NIGHT MODE" : "DAY MODE"); }
       if(e.code === "KeyR"){ reset(); toast("RESET"); }
+
+      // quick select 1-5
+      if(e.code.startsWith("Digit")){
+        const n = parseInt(e.code.replace("Digit",""),10);
+        if(n>=1 && n<=5){
+          sel.value = CAR_PROFILES[n-1].id;
+          sel.dispatchEvent(new Event('change'));
+        }
+      }
     });
     addEventListener('keyup', (e)=> keys.delete(e.code));
 
     function reset(){
       state.speed = 0;
       state.dist = 0;
-      state.x = 0;
-      state.xVel = 0;
-      state.zScroll = 0;
-      curvePhase = 0;
-      curveCurrent = 0;
-      nextCurveTarget();
-      // reset segments positions
-      segments.forEach((s,i)=>{
-        s.group.position.z = -i*ROAD_LEN;
-        s.group.position.x = 0;
-        s.group.rotation.y = 0;
-        s.xOff = 0; s.yaw = 0;
-      });
-      // reset scenery z into range
-      deco.forEach(d=>{
-        d.obj.position.z = -Math.random()*RECYCLE_Z;
-      });
+      state.laneX = 0;
+      state.laneV = 0;
+
+      segT = 0;
+      k = 0; kTarget = 0; kPhase = 0; pickKTarget();
+      initCenterline();
+
+      // randomize deco positions
+      for(const d of deco){
+        d.sIndex = 10 + Math.floor(Math.random()*(SEG_COUNT-20));
+        d.side = Math.random()<0.5?-1:1;
+        d.xOff = (d.kind==="tree" ? (ROAD_WIDTH*0.9 + 6 + Math.random()*26) : (ROAD_WIDTH*0.9 + 28 + Math.random()*70)) * d.side;
+      }
     }
 
-    // ===== Camera follow =====
-    camera.position.set(0, 4.5, 10);
-    camera.lookAt(0, 1.2, -12);
+    // ===== camera =====
+    camera.position.set(0, 5.5, 12.0);
 
-    // ===== Animation loop =====
+    // ===== update centerline forward =====
+    function advanceCenterline(stepMeters){
+      // curvature slowly moves to target (smooth)
+      kPhase += stepMeters * 0.015; // slower changes with distance
+      if(kPhase > 1.0){
+        kPhase = 0;
+        pickKTarget();
+      }
+      // ease curvature toward target
+      k = lerp(k, kTarget, 0.05);
+
+      // Update yaw using curvature * distance
+      const lastYaw = headings[headings.length-1];
+      const newYaw = clamp(lastYaw + k * stepMeters, -1.05, 1.05); // keep within sane range
+
+      // Create new point stepping from last point
+      const lastPos = centers[centers.length-1];
+      const dir = new THREE.Vector3(Math.sin(newYaw), 0, -Math.cos(newYaw));
+      const newPos = lastPos.clone().addScaledVector(dir, stepMeters);
+
+      centers.push(newPos);
+      headings.push(newYaw);
+
+      // keep buffer length = SEG_COUNT+1
+      while(centers.length > SEG_COUNT+1){
+        centers.shift();
+        headings.shift();
+      }
+    }
+
+    // ===== place road segments along centerline =====
+    function layoutRoad(){
+      for(let i=0;i<SEG_COUNT;i++){
+        // road segment i uses center between centers[i] and centers[i+1]
+        const a = centers[i];
+        const b = centers[i+1];
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+
+        const yaw = headings[i];
+        const g = roadSeg[i];
+        g.position.set(mid.x, 0, mid.z);
+        g.rotation.y = yaw;
+      }
+    }
+
+    // ===== place scenery anchored to segment index =====
+    function layoutScenery(){
+      for(const d of deco){
+        const idx = clamp(d.sIndex|0, 1, SEG_COUNT-2);
+        const c = centers[idx];
+        const yaw = headings[idx];
+
+        // right vector for lateral offset
+        const right = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw)); // perpendicular to forward
+        const pos = c.clone().addScaledVector(right, d.xOff);
+
+        if(d.kind === "tree"){
+          d.obj.position.set(pos.x, 0, pos.z);
+        }else{
+          d.obj.position.set(pos.x, d.y || 6, pos.z);
+        }
+        d.obj.rotation.y = yaw + (d.kind==="hill" ? 0 : (Math.random()*0.2-0.1));
+      }
+    }
+
+    // ===== animate =====
     let last = performance.now();
 
-    function update(dt){
-      // Inputs
-      const accel = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
-      const steer = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
-      const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
-
-      const maxSpd = boost ? 52 : 36;       // ~km/h 느낌으로
-      const a = boost ? 18 : 12;
-      const drag = 6.5;
-
-      state.speed += accel * a * dt;
-      state.speed -= drag * dt * (state.speed / Math.max(1, maxSpd));
-      state.speed = clamp(state.speed, 0, maxSpd);
-
-      // Lateral movement with springy feel
-      const steerPower = 9.5 + state.speed*0.05;
-      state.xVel += steer * steerPower * dt;
-      state.xVel *= Math.pow(0.12, dt);      // damping
-      state.x += state.xVel * dt;
-
-      // Soft clamp + return if outside lane
-      const over = Math.max(0, Math.abs(state.x) - state.laneMax);
-      if(over > 0){
-        state.x -= Math.sign(state.x) * over * 2.2 * dt;
-        state.xVel *= 0.6;
-      }
-      state.x = clamp(state.x, -state.laneMax-0.6, state.laneMax+0.6);
-
-      // Distance / scroll
-      const dz = state.speed * dt * 3.2; // scale to feel faster
-      state.dist += dz;
-      state.zScroll += dz;
-
-      // Curve: smoothly drift curveCurrent toward target and occasionally pick new target
-      curvePhase += dt * (0.45 + state.speed*0.012);
-      if(curvePhase > 1){
-        curvePhase = 0;
-        nextCurveTarget();
-      }
-      curveCurrent = lerp(curveCurrent, curveTarget, 0.6*dt);
-      // Lateral drift due to road curve (auto-centering feel)
-      state.x += curveCurrent * state.speed * 0.06 * dt;
-
-      // Move/recycle road segments forward
-      // We simulate movement by moving segments towards +z (towards camera) and wrapping.
-      segments.forEach((seg)=>{
-        seg.group.position.z += dz;
-      });
-
-      // recycle: if segment passes camera, wrap to far back and update its curve offset/yaw
-      for(const seg of segments){
-        if(seg.group.position.z > ROAD_LEN){
-          seg.group.position.z -= RECYCLE_Z;
-
-          // Apply curve to next segment: accumulate x offset and yaw
-          // Use curveCurrent plus some micro variation
-          const micro = (Math.random()*2-1) * 0.010;
-          seg.yaw = clamp(curveCurrent + micro, -0.18, 0.18);
-          seg.xOff = (segments[(segments.indexOf(seg)-1+segments.length)%segments.length].xOff || 0) + seg.yaw*2.5;
-
-          // Keep road centered within reasonable bounds
-          seg.xOff = clamp(seg.xOff, -18, 18);
-          seg.group.position.x = seg.xOff;
-          seg.group.rotation.y = seg.yaw;
-        }
-      }
-
-      // Update car position on road (use current segment center as base)
-      // Find the segment nearest z=0 (camera area)
-      let nearest = segments[0];
-      let best = Infinity;
-      for(const s of segments){
-        const d = Math.abs(s.group.position.z - 0);
-        if(d < best){ best = d; nearest = s; }
-      }
-      const baseX = nearest.group.position.x;
-      car.position.set(baseX + state.x, 0, 2.5);
-      car.rotation.y = -steer*0.10 + nearest.group.rotation.y*0.25;
-
-      // Headlights intensity at night
-      const headI = isNight ? 2.2 : 0.0;
-      headL.intensity = headI;
-      headR.intensity = headI;
-
-      // Recycle scenery to stay ahead/behind
-      deco.forEach(d=>{
-        d.obj.position.z += dz;
-        if(d.obj.position.z > 30){
-          d.obj.position.z -= RECYCLE_Z;
-
-          // Re-randomize x a bit on recycle
-          const side = Math.random()<0.5 ? -1 : 1;
-          if(d.kind === "tree"){
-            d.obj.position.x = side*(ROAD_WIDTH*0.9 + 6 + Math.random()*26);
-          }else{
-            d.obj.position.x = side*(ROAD_WIDTH*0.9 + 28 + Math.random()*70);
-          }
-        }
-      });
-
-      // Camera follow (smooth)
-      const camTargetPos = new THREE.Vector3(car.position.x, 4.8, 11.5);
-      camera.position.lerp(camTargetPos, 1 - Math.pow(0.001, dt));
-      const lookAt = new THREE.Vector3(car.position.x*0.75, 1.2, -18);
-      camera.lookAt(lookAt);
-
-      // Update HUD
-      const kmh = Math.round(state.speed * 3.2); // stylized
-      document.getElementById('spd').textContent = `${kmh} km/h`;
-      document.getElementById('dst').textContent = `${(state.dist/1000).toFixed(1)} km`;
-    }
-
-    function animate(){
+    function tick(){
       const now = performance.now();
-      const dt = Math.min(0.033, (now - last)/1000);
+      const dt = Math.min(0.033, (now-last)/1000);
       last = now;
 
-      update(dt);
-      renderer.render(scene, camera);
-      requestAnimationFrame(animate);
-    }
-    animate();
+      // input
+      const accelIn = (keys.has("KeyW") ? 1 : 0) - (keys.has("KeyS") ? 1 : 0);
+      const steerIn = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
+      const boost = keys.has("ShiftLeft") || keys.has("ShiftRight");
 
+      // speed (use real-ish topSpeed in km/h)
+      const maxSpeed = (currentCar.topSpeed / 3.6) * (boost ? 1.08 : 1.0); // m/s
+      const accelBase = 10.5 * currentCar.accelMul * (boost ? 1.25 : 1.0);
+      const brake = 13.5;
+      const drag = 2.4;
+
+      if(accelIn > 0){
+        state.speed += accelBase * dt;
+      }else if(accelIn < 0){
+        state.speed -= brake * dt;
+      }else{
+        // coasting drag
+        state.speed -= drag * dt * (0.35 + state.speed*0.03);
+      }
+      state.speed = clamp(state.speed, 0, maxSpeed);
+
+      // lateral handling (stiffer at higher speed)
+      const steerPower = 7.5 + state.speed*0.18;
+      state.laneV += steerIn * steerPower * dt;
+      state.laneV *= Math.pow(0.10, dt); // damping
+      state.laneX += state.laneV * dt;
+
+      // lane bounds
+      const laneMax = ROAD_WIDTH/2 - 1.05;
+      const over = Math.max(0, Math.abs(state.laneX) - laneMax);
+      if(over>0){
+        state.laneX -= Math.sign(state.laneX) * over * 2.6 * dt;
+        state.laneV *= 0.6;
+      }
+      state.laneX = clamp(state.laneX, -laneMax-0.6, laneMax+0.6);
+
+      // advance distance (world)
+      const dz = state.speed * dt; // meters advanced
+      state.dist += dz;
+
+      // progress within segment
+      segT += dz;
+      while(segT >= SEG_LEN){
+        segT -= SEG_LEN;
+
+        // when we pass a segment, shift scenery indices backward and generate new forward point
+        // move all deco segment anchors closer
+        for(const d of deco){
+          d.sIndex -= 1;
+          if(d.sIndex < 8){
+            // recycle to far ahead
+            d.sIndex = (SEG_COUNT-10) + Math.floor(Math.random()*8);
+            d.side = Math.random()<0.5?-1:1;
+            d.xOff = (d.kind==="tree" ? (ROAD_WIDTH*0.9 + 6 + Math.random()*26) : (ROAD_WIDTH*0.9 + 28 + Math.random()*70)) * d.side;
+            if(d.kind==="hill") d.y = 4*(0.9 + Math.random()*1.8);
+          }
+        }
+      }
+
+      // ensure centerline buffer moves forward with distance:
+      // if segT progressed, we keep generating new points so buffer stays ahead in -Z direction.
+      // generate based on dz but quantized for stability
+      const genStep = SEG_LEN; // generate one point per segment length
+      // We'll generate enough points so we always have SEG_COUNT+1 points; when segT pushes us,
+      // we create an extra point every time we've effectively moved one segment.
+      // Simpler: generate a small number each frame based on dz but clamp.
+      const addN = Math.min(4, Math.ceil((dz + 0.0001) / genStep));
+      for(let i=0;i<addN;i++){
+        advanceCenterline(genStep);
+      }
+
+      // shift road buffer forward visually by interpolating between centers[0] and centers[1]
+      // We fake "moving forward" by translating everything backward by segT along forward direction.
+      // We'll apply an offset along the first heading.
+      const yaw0 = headings[0];
+      const fwd0 = new THREE.Vector3(Math.sin(yaw0), 0, -Math.cos(yaw0));
+      const offset = fwd0.clone().multiplyScalar(segT);
+
+      // layout road with offset (subtract offset so camera stays near origin-ish)
+      for(let i=0;i<SEG_COUNT;i++){
+        const a = centers[i].clone().sub(offset);
+        const b = centers[i+1].clone().sub(offset);
+        const mid = a.clone().add(b).multiplyScalar(0.5);
+        const yaw = headings[i];
+
+        const g = roadSeg[i];
+        g.position.set(mid.x, 0, mid.z);
+        g.rotation.y = yaw;
+      }
+
+      // car position near "current segment" around origin
+      // use center at index 1 (slightly ahead) and heading 1
+      const cCar = centers[1].clone().sub(offset);
+      const yawCar = headings[1];
+      const right = new THREE.Vector3(Math.cos(yawCar), 0, Math.sin(yawCar));
+      const forward = new THREE.Vector3(Math.sin(yawCar), 0, -Math.cos(yawCar));
+
+      const carPos = cCar.clone()
+        .addScaledVector(right, state.laneX)
+        .addScaledVector(forward, 6.0);
+
+      car.position.set(carPos.x, 0, carPos.z);
+      car.rotation.y = yawCar + (-steerIn * 0.12);
+
+      // wheel spin
+      const wheels = car.userData.wheels || [];
+      const spin = state.speed * dt * 2.4;
+      for(const w of wheels) w.rotation.x -= spin;
+
+      // headlights / underglow at night
+      const headI = isNight ? 2.2 : 0.0;
+      car.userData.headL.intensity = headI;
+      car.userData.headR.intensity = headI;
+      car.userData.under.intensity = isNight ? 0.6 : 0.0;
+
+      // scenery layout
+      for(const d of deco){
+        const idx = clamp((d.sIndex|0), 1, SEG_COUNT-2);
+        const c = centers[idx].clone().sub(offset);
+        const yaw = headings[idx];
+        const r = new THREE.Vector3(Math.cos(yaw), 0, Math.sin(yaw));
+        const pos = c.clone().addScaledVector(r, d.xOff);
+
+        if(d.kind==="tree"){
+          d.obj.position.set(pos.x, 0, pos.z);
+          d.obj.rotation.y = yaw;
+        }else{
+          d.obj.position.set(pos.x, d.y || 6, pos.z);
+          d.obj.rotation.y = yaw*0.25;
+        }
+      }
+
+      // camera follow (smooth)
+      const camTarget = new THREE.Vector3(car.position.x, 5.8, car.position.z + 14.0);
+      camera.position.lerp(camTarget, 1 - Math.pow(0.001, dt));
+
+      const lookAt = new THREE.Vector3(car.position.x*0.65, 1.2, car.position.z - 22.0);
+      camera.lookAt(lookAt);
+
+      // HUD
+      const kmh = Math.round(state.speed * 3.6);
+      document.getElementById('spd').textContent = `${kmh} km/h`;
+      document.getElementById('dst').textContent = `${(state.dist/1000).toFixed(1)} km`;
+
+      renderer.render(scene, camera);
+      requestAnimationFrame(tick);
+    }
+
+    // ===== start =====
+    toast("1~5로 차를 바로 바꿀 수도 있어 🚗");
+    tick();
+
+    // ===== resize =====
     addEventListener('resize', ()=>{
       renderer.setSize(innerWidth, innerHeight);
       camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
     });
 
-    toast("W로 출발해봐 🚗");
   </script>
 </body>
 </html>
