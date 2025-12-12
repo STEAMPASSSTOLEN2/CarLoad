@@ -500,6 +500,15 @@
     const keys = new Set();
     window.addEventListener('keydown', (e)=>{
       if(e.repeat) return;
+
+      // UI 슬라이더/셀렉트에 포커스가 잡힌 채로 운전키를 누르면,
+      // 입력이 막혀서 "재가속이 안되는" 현상이 생길 수 있음 → 운전키 누르면 자동으로 포커스 해제
+      const isDriveKey = ['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code);
+      const ae = document.activeElement;
+      if(isDriveKey && ae && ['INPUT','SELECT','BUTTON','TEXTAREA'].includes(ae.tagName)){
+        ae.blur();
+      }
+
       keys.add(e.code);
 
       if(e.code === 'KeyL'){
@@ -572,7 +581,8 @@
     function clamp(v,a,b){ return Math.max(a, Math.min(b,v)); }
 
     function updateInput(){
-      // 포커스가 게임 캔버스/문서에 있을 때만 입력 허용 (UI 클릭 시 오작동 방지)
+      // 포커스가 UI에 있을 땐 운전 입력을 막되,
+      // 운전키를 누르면 keydown에서 자동 blur 처리하므로 "고착" 문제는 없음.
       if(document.activeElement && ['INPUT','SELECT','BUTTON','TEXTAREA'].includes(document.activeElement.tagName)){
         state.throttle = 0; state.brake = 0; state.steer = 0; state.handbrake = 0; return;
       }
@@ -652,15 +662,23 @@
       const yawRate = (state.vForward / wheelbase) * Math.tan(steerAngle) / inertia * 0.72;
       state.yaw += yawRate * dt;
 
-      // --- Lateral dynamics (simple slip model) ---
-      // Convert forward movement into lateral slip when turning. Handbrake increases slip.
-      const slipAdd = Math.abs(yawRate) * (2.2 + 4.0*state.handbrake) * dt;
-      state.vSide += Math.sign(steerInput) * slipAdd * Math.sign(state.vForward || 1);
+      // --- Lateral dynamics (Grip/Drift 분리) ---
+      // base grip (UI): 높을수록 접지, 낮을수록 드리프트
+      // drift grip: 핸드브레이크/고속-급조향 시 자동으로 낮춰서 "드리프트 모드" 느낌
+      const baseGrip = grip; // 0.60~0.98
+      const speedSlip = clamp(speedAbs / 28.0, 0, 1);
+      const steerAbs = Math.abs(steerInputRaw);
 
-      // Apply grip to kill lateral velocity (this fixes "angle changes but direction stays" feel)
-      // Higher grip -> faster lateral damping
-      const sideDamp = 1.0 - grip;
-      state.vSide *= Math.exp(- (3.0 + 10.0*sideDamp) * dt);
+      const driftTrigger = (state.handbrake > 0) || (speedSlip > 0.55 && steerAbs > 0.55);
+      const gripEff = driftTrigger ? clamp(baseGrip * 0.62, 0.40, 0.96) : baseGrip;
+
+      // 코너에서 옆미끄럼 생성: grip이 낮을수록(=드리프트) 더 잘 옆으로 흐름
+      const slipCoeff = driftTrigger ? 5.2 : 2.8;
+      state.vSide += Math.sign(steerInputRaw) * Math.abs(yawRateTarget) * (0.8 + 1.4*speedSlip) * slipCoeff * (1.0 - gripEff) * dt * Math.sign(state.vForward || 1);
+
+      // 옆미끄럼 감쇠: gripEff가 높을수록 빠르게 0으로 수렴
+      const sideDamp = 1.0 - gripEff;
+      state.vSide *= Math.exp(-(4.5 + 14.0*sideDamp) * dt);
 
       // Handbrake also reduces forward speed a bit
       if(state.handbrake){
